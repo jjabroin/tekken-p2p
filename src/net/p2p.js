@@ -8,15 +8,16 @@ export function makeCode() {
   return s;
 }
 
-const APP_ID = 'tekken-p2p-v1';
+const APP_ID = 'tekken-p2p-v2';
 
-export function createNet({ code, onPeerJoin, onPeerLeave, onState, onAction, onHit, onHello }) {
+export function createNet({ code, onPeerJoin, onPeerLeave, onState, onAction, onHit, onHello, onSys }) {
   const room = joinRoom({ appId: APP_ID }, code);
 
   const [sendState, getState] = room.makeAction('st');
   const [sendAction, getAction] = room.makeAction('ac');
   const [sendHit, getHit] = room.makeAction('hit');
   const [sendHello, getHello] = room.makeAction('hi');
+  const [sendSys, getSys] = room.makeAction('sys');
 
   room.onPeerJoin((id) => onPeerJoin?.(id));
   room.onPeerLeave((id) => onPeerLeave?.(id));
@@ -24,6 +25,7 @@ export function createNet({ code, onPeerJoin, onPeerLeave, onState, onAction, on
   getAction((a, id) => onAction?.(a, id));
   getHit((h, id) => onHit?.(h, id));
   getHello((h, id) => onHello?.(h, id));
+  getSys((s, id) => onSys?.(s, id));
 
   return {
     room,
@@ -32,6 +34,7 @@ export function createNet({ code, onPeerJoin, onPeerLeave, onState, onAction, on
     sendAction: (a) => sendAction(a),
     sendHit: (h) => sendHit(h),
     sendHello: (h) => sendHello(h),
+    sendSys: (s) => sendSys(s),
     leave: () => room.leave(),
   };
 }

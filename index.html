@@ -3,68 +3,95 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<title>Tekken P2P — 철권풍 P2P 격투 게임</title>
+<title>IRON FIST P2P — 철권풍 도트 격투 게임</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🥊</text></svg>" />
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a12; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #06060c; }
   body { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
-  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 30%, #2a1a3a 0%, #0a0a12 70%); }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 30%, #2a1430 0%, #06060c 70%); }
   #stage { position: relative; width: min(960px, 100vw); aspect-ratio: 16/9; max-height: 100vh; }
-  canvas { width: 100%; height: 100%; display: block; border-radius: 12px; background: #14141f; box-shadow: 0 20px 80px rgba(0,0,0,.6); touch-action: none; }
-  #hud { position: absolute; top: 0; left: 0; right: 0; padding: 10px 14px; display: none; pointer-events: none; }
-  #hud.visible { display: block; }
-  #bars { display: flex; gap: 10px; align-items: center; }
-  .hpbar { flex: 1; height: 22px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; overflow: hidden; position: relative; }
-  .hpbar .fill { height: 100%; width: 100%; transition: width .15s; }
-  .hpbar.p1 .fill { background: linear-gradient(90deg, #22b573, #a3e635); float: right; }
-  .hpbar.p2 .fill { background: linear-gradient(90deg, #ff4d6d, #ff9f1c); }
-  .hpbar .name { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px; font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 1px 4px #000; }
-  #timer { width: 64px; text-align: center; font-size: 24px; font-weight: 900; color: #ffd75e; text-shadow: 0 2px 8px #000; }
-  #round { text-align: center; font-size: 12px; color: #fff; opacity: .8; margin-top: 4px; }
-  #roomPill { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 999px; padding: 6px 14px; font-size: 13px; pointer-events: auto; cursor: pointer; }
+  canvas { width: 100%; height: 100%; display: block; border-radius: 12px; background: #14141f; box-shadow: 0 20px 80px rgba(0,0,0,.6); touch-action: none; image-rendering: pixelated; }
+  #scan { position: absolute; inset: 0; pointer-events: none; border-radius: 12px; z-index: 4;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+    box-shadow: inset 0 0 120px rgba(0,0,0,.55); }
+  #hud { position: absolute; top: 0; left: 0; right: 0; padding: 8px 12px; display: none; pointer-events: none; z-index: 5; }
+  #bars { display: flex; gap: 8px; align-items: stretch; }
+  .hside { flex: 1; }
+  .hpbar { height: 18px; background: rgba(0,0,0,.6); border: 2px solid #ddd; border-radius: 3px; overflow: hidden; transform: skewX(-12deg); }
+  .hpbar.p2 { transform: skewX(12deg); }
+  .hpbar .fill { height: 100%; width: 100%; transition: width .12s; background: linear-gradient(180deg, #fff36b, #ffb52e 55%, #e8641b); }
+  .hpbar.hurt .fill { background: linear-gradient(180deg, #ff8a7b, #e8302a 55%, #8e1010); }
+  .nm { display: flex; justify-content: space-between; align-items: baseline; color: #fff; font-size: 13px; font-weight: 900; font-style: italic; text-shadow: 2px 2px 0 #000; }
+  .nm small { font-size: 10px; font-style: normal; opacity: .7; font-weight: 400; }
+  .pips { color: #ffd75e; font-size: 13px; letter-spacing: 2px; text-shadow: 2px 2px 0 #000; }
+  #mid { width: 70px; text-align: center; }
+  #timer { font-size: 26px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 2px 2px 0 #000; }
+  #round { text-align: center; font-size: 11px; color: #ffd75e; font-weight: 800; text-shadow: 1px 1px 0 #000; }
+  .rage { display: inline-block; font-size: 10px; font-weight: 900; color: #fff; background: linear-gradient(180deg,#ff5a5a,#a01010); border: 1px solid #ffd75e; border-radius: 3px; padding: 1px 5px; visibility: hidden; animation: blink .5s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .4; } }
+  #roomPill { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.25); color: #fff; border-radius: 999px; padding: 5px 14px; font-size: 12px; cursor: pointer; z-index: 6; display: none; }
   #roomPill b { color: #ffd75e; letter-spacing: 2px; }
-  #menu { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,5,12,.78); border-radius: 12px; z-index: 10; }
-  #menu.hidden { display: none; }
-  .card { background: rgba(20,20,35,.95); border: 1px solid rgba(255,255,255,.14); border-radius: 16px; padding: 26px 28px; width: min(430px, 92%); color: #fff; text-align: center; }
-  .card h1 { font-size: 26px; }
-  .card p.sub { opacity: .7; font-size: 13px; margin: 6px 0 14px; line-height: 1.6; }
-  .card input { width: 100%; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.07); color: #fff; font-size: 15px; outline: none; }
+  #menu { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,0,10,.55); border-radius: 12px; z-index: 10; }
+  .card { background: rgba(14,10,24,.96); border: 2px solid #ffd75e; border-radius: 12px; padding: 22px 24px; width: min(460px, 94%); color: #fff; text-align: center; max-height: 96%; overflow-y: auto; }
+  .card h1 { font-size: 24px; font-style: italic; color: #ffd75e; text-shadow: 2px 2px 0 #701010; }
+  .card p.sub { opacity: .75; font-size: 12px; margin: 6px 0 12px; line-height: 1.6; }
+  .card input { width: 100%; padding: 9px 12px; margin: 5px 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.07); color: #fff; font-size: 14px; outline: none; }
   .row { display: flex; gap: 8px; margin-top: 8px; }
   .row button { flex: 1; }
-  button { padding: 11px 14px; border-radius: 10px; border: none; font-size: 15px; font-weight: 800; cursor: pointer; background: #e63b5f; color: #fff; }
-  button:hover { filter: brightness(1.1); }
+  button { padding: 10px 12px; border-radius: 8px; border: none; font-size: 14px; font-weight: 800; cursor: pointer; background: #c02020; color: #fff; }
+  button:hover { filter: brightness(1.15); }
   button.ghost { background: rgba(255,255,255,.14); }
-  button.green { background: #22b573; }
-  .help { margin-top: 14px; font-size: 12px; line-height: 1.8; opacity: .75; text-align: left; }
-  #toast { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 5; }
-  .toast { background: rgba(20,20,40,.92); border: 1px solid rgba(255,255,255,.2); color: #fff; padding: 10px 20px; border-radius: 12px; font-size: 16px; font-weight: 800; animation: pop .25s ease-out; }
+  button.green { background: #1d9e57; }
+  .help { margin-top: 12px; font-size: 11.5px; line-height: 1.8; opacity: .8; text-align: left; }
+  .help b { color: #ffd75e; }
+  #resultBar { position: absolute; left: 0; right: 0; bottom: 12%; text-align: center; z-index: 8; display: none; pointer-events: none; }
+  #resultTitle { font-size: 52px; font-weight: 900; font-style: italic; text-shadow: 3px 3px 0 #000, -1px -1px 0 #000; }
+  #resultSub { margin-top: 6px; font-size: 13px; color: #fff; text-shadow: 2px 2px 0 #000; }
+  #toast { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; z-index: 9; }
+  .toast { background: rgba(10,10,25,.92); border: 1px solid rgba(255,255,255,.25); color: #fff; padding: 8px 18px; border-radius: 10px; font-size: 14px; font-weight: 800; animation: pop .25s ease-out; white-space: nowrap; }
   @keyframes pop { from { transform: scale(.85); opacity: 0; } }
-  #touchUI { position: absolute; inset: auto 0 0 0; display: none; justify-content: space-between; padding: 0 12px 12px; pointer-events: none; }
+  #touchUI { position: absolute; inset: auto 0 0 0; display: none; justify-content: space-between; padding: 0 10px 10px; pointer-events: none; z-index: 7; }
   body.touch #touchUI { display: flex; }
-  .tgroup { display: flex; gap: 8px; pointer-events: auto; }
-  .tgroup button { width: 58px; height: 58px; border-radius: 50%; padding: 0; font-size: 14px; background: rgba(20,20,40,.65); border: 2px solid rgba(255,255,255,.4); touch-action: none; user-select: none; -webkit-user-select: none; }
-  .tgroup button:active { background: rgba(230,59,95,.7); }
+  .tgroup { display: flex; gap: 6px; pointer-events: auto; align-items: flex-end; }
+  .tgroup button { width: 52px; height: 52px; border-radius: 50%; padding: 0; font-size: 13px; font-weight: 900; background: rgba(20,20,40,.6); border: 2px solid rgba(255,255,255,.45); touch-action: none; user-select: none; -webkit-user-select: none; }
+  .tgroup button:active { background: rgba(200,30,30,.7); }
+  .tgroup button.rage { border-color: #ffd75e; color: #ffd75e; width: 44px; height: 44px; font-size: 11px; }
+  #touchSel { position: absolute; inset: auto 0 12px 0; display: none; justify-content: center; gap: 16px; z-index: 7; pointer-events: none; }
+  #touchSel button { pointer-events: auto; width: 72px; height: 56px; font-size: 20px; background: rgba(20,20,40,.6); border: 2px solid rgba(255,255,255,.45); color: #fff; border-radius: 12px; }
 </style>
 </head>
 <body>
 <div id="wrap">
   <div id="stage">
-    <canvas id="game" width="960" height="540"></canvas>
+    <canvas id="game" width="480" height="270"></canvas>
+    <div id="scan"></div>
     <div id="hud">
       <div id="bars">
-        <div class="hpbar p1"><div class="fill" id="hp1"></div><div class="name" id="name1">P1</div></div>
-        <div id="timer">60</div>
-        <div class="hpbar p2"><div class="fill" id="hp2"></div><div class="name" id="name2" style="justify-content:flex-end">P2</div></div>
+        <div class="hside">
+          <div class="nm"><span><span id="name1">P1</span> <span class="rage" id="rage1">RAGE</span></span><span class="pips" id="pips1">○○</span></div>
+          <div class="hpbar p1" id="bar1"><div class="fill" id="hp1"></div></div>
+          <div class="nm"><small id="sub1"></small></div>
+        </div>
+        <div id="mid">
+          <div id="timer">60</div>
+          <div id="round">ROUND 1</div>
+        </div>
+        <div class="hside">
+          <div class="nm"><span class="pips" id="pips2">○○</span><span><span class="rage" id="rage2">RAGE</span> <span id="name2">P2</span></span></div>
+          <div class="hpbar p2" id="bar2"><div class="fill" id="hp2"></div></div>
+          <div class="nm" style="justify-content:flex-end"><small id="sub2"></small></div>
+        </div>
       </div>
-      <div id="round">ROUND 1 · 먼저 2승</div>
     </div>
     <div id="toast"></div>
-    <div id="roomPill" style="display:none">방 코드 <b id="roomCode">------</b> 📋</div>
+    <div id="roomPill">방 코드 <b id="roomCode">------</b> 📋</div>
+    <div id="resultBar"><div id="resultTitle">YOU WIN</div><div id="resultSub"></div></div>
     <div id="menu">
       <div class="card">
-        <h1>🥊 Tekken P2P</h1>
-        <p class="sub">서버 없이 방 코드로 맞붙는 1v1 격투 게임<br/>GitHub Pages에서 바로 실행됩니다.</p>
+        <h1>🥊 IRON FIST P2P</h1>
+        <p class="sub">서버 없이 방 코드로 맞붙는 철권식 도트 격투 게임<br/>8명 중 파이터를 고르고 1,1,2 스트링과 풍신권을 날려보세요!</p>
         <input id="nick" maxlength="12" placeholder="닉네임 (예: 철권왕)" />
         <input id="code" maxlength="6" placeholder="방 코드 6자리 (참가할 때만)" style="text-transform:uppercase" />
         <div class="row">
@@ -75,9 +102,10 @@
           <button id="btnSolo" class="ghost">혼자 하기 (CPU전)</button>
         </div>
         <div class="help">
-          ⌨️ <b>A/D</b> 이동 · <b>W</b> 점프 · <b>S</b> 가드<br/>
-          👊 <b>J</b> 펀치 · 🦵 <b>K</b> 킥 · ✨ <b>L</b> 필살기(게이지 100%)<br/>
-          📱 모바일: 좌우 버튼 이동 + 펀치/킥/가드/점프 버튼
+          🕹️ <b>A/D</b> 이동 · <b>W</b> 점프 · <b>S</b> 앉기 · <b>뒤 방향키 홀드</b> 가드(철권식)<br/>
+          👊 <b>J=1 LP</b> · <b>K=2 RP</b> · <b>U=3 LK</b> · <b>I=4 RK</b> · <b>R</b> 레이지아츠<br/>
+          🌀 <b>1,1,2</b> 스트링 · <b>df+2</b> 띄우기 · <b>f,n,d,df+2</b> 풍신권(KAZUMA/HEIJI)<br/>
+          🤼 <b>J+U / K+I</b> 잡기 · <b>J+K</b> 스크류(공중 콤보 연장) · <b>→→</b> 대시
         </div>
       </div>
     </div>
@@ -85,13 +113,20 @@
       <div class="tgroup">
         <button id="tLeft">◀</button>
         <button id="tRight">▶</button>
+        <button id="tDown">▼</button>
+        <button id="tUp">▲</button>
       </div>
       <div class="tgroup">
-        <button id="tGuard">🛡</button>
-        <button id="tJump">⬆</button>
-        <button id="tPunch">👊</button>
-        <button id="tKick">🦵</button>
+        <button id="tRage" class="rage">R</button>
+        <button id="t1">1</button>
+        <button id="t2">2</button>
+        <button id="t3">3</button>
+        <button id="t4">4</button>
       </div>
+    </div>
+    <div id="touchSel">
+      <button id="tSelL">◀</button>
+      <button id="tSelR">▶</button>
     </div>
   </div>
 </div>

@@ -1,150 +1,311 @@
-import { CFG, MOVES } from './config.js';
+import { CFG } from './config.js';
 import { Fighter } from './fighter.js';
+import { getMove } from './characters.js';
 import { sfx } from './audio.js';
+
+const COMBO_SCALE = [1, 0.7, 0.5, 0.4, 0.32, 0.26, 0.22];
 
 export class Game {
   constructor(canvas, opts = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    this.ctx.imageSmoothingEnabled = false;
     this.onEvent = opts.onEvent || (() => {});
-    this.resetMatch(opts.p1Name || 'P1', opts.p2Name || 'P2');
+    this.sheets = opts.sheets || {}; // charId -> {img, meta}
+    this.demo = !!opts.demo;
     this.shake = 0;
     this.hitstop = 0;
+    this.timeScale = 1;
+    this.slowT = 0;
+    this.particles = [];
+    this.announce = null; // {text, sub, t, dur, size}
+    this.combo = { p1: null, p2: null };
+    this.cpuT = 0;
+    this.resetMatch(opts.p1 || { name: 'P1', charId: 0 }, opts.p2 || { name: 'P2', charId: 0 });
   }
 
-  resetMatch(p1Name, p2Name) {
-    this.p1 = new Fighter({ x: CFG.W * 0.3, color: '#3b82f6', facing: 1, name: p1Name, isLocal: true });
-    this.p2 = new Fighter({ x: CFG.W * 0.7, color: '#ef4444', facing: -1, name: p2Name });
+  resetMatch(p1, p2) {
+    const { CHARS } = Game;
+    this.p1 = new Fighter({ x: 150, facing: 1, name: p1.name, char: CHARS[p1.charId] || CHARS[0], isLocal: true });
+    this.p2 = new Fighter({ x: 330, facing: -1, name: p2.name, char: CHARS[p2.charId] || CHARS[0] });
+    this.p1.charId = p1.charId; this.p2.charId = p2.charId;
     this.wins = { p1: 0, p2: 0 };
     this.round = 1;
-    this.time = CFG.ROUND_TIME;
-    this.phase = 'fight'; // fight|roundEnd|matchEnd
-    this.phaseT = 0;
-    this.localSide = 'p1';
+    this.perfects = { p1: 0, p2: 0 };
+    this.startRound(true);
   }
 
+  static setChars(CHARS) { Game.CHARS = CHARS; }
+
   setLocalSide(side) {
-    this.localSide = side;
+    this.localSide = side || 'p1';
     this.p1.isLocal = side === 'p1';
     this.p2.isLocal = side === 'p2';
   }
-
   get local() { return this.localSide === 'p1' ? this.p1 : this.p2; }
   get remote() { return this.localSide === 'p1' ? this.p2 : this.p1; }
 
-  resetRound() {
-    for (const [f, x, face] of [[this.p1, CFG.W * 0.3, 1], [this.p2, CFG.W * 0.7, -1]]) {
-      f.x = x; f.y = CFG.GROUND_Y; f.vx = 0; f.vy = 0;
-      f.hp = 100; f.state = 'idle'; f.attack = null; f.blocking = false; f.onGround = true;
-      f.facing = face;
-    }
+  startRound(first = false) {
+    this.p1.resetRound(150, 1);
+    this.p2.resetRound(330, -1);
     this.time = CFG.ROUND_TIME;
-    this.phase = 'fight';
+    this.phase = 'announce';
     this.phaseT = 0;
-    sfx.round();
-    this.onEvent('round', { round: this.round });
-  }
-
-  localAttack(kind) {
-    const f = this.local;
-    const res = f.tryAttack(kind);
-    if (res) {
-      if (kind === 'special') sfx.special();
-      this.onEvent('action', { kind, seq: res.seq });
+    this.combo = { p1: null, p2: null };
+    this.particles.length = 0;
+    this.announce = null;
+    if (!this.demo) {
+      this.say(`ROUND ${this.round}`, '', 55, 40);
+      sfx.round();
+      this.onEvent('round', { round: this.round });
+    } else {
+      this.phase = 'fight';
     }
-    return res;
+    if (first) this.phaseT = 0;
   }
 
-  // 원격이 보낸 액션 적용
-  applyRemoteAction({ kind }) {
+  say(text, sub = '', dur = 50, size = 44) {
+    this.announce = { text, sub, t: 0, dur, size };
+  }
+
+  localAttack(code) {
+    const f = this.local;
+    if (this.phase !== 'fight') return null;
+    f.input.press(code);
+    return true;
+  }
+
+  localAttack(code) {
+    if (this.phase !== 'fight') return;
+    this.local.input.press(code);
+  }
+
+  rageArt() {
+    const f = this.local;
+    if (this.phase !== 'fight') return;
+    if (!f.rage || f.rageUsed || !f.canAct() || !f.onGround) return;
+    f.rageUsed = true;
+    const res = f.startMove('rage');
+    if (res) { sfx.rage(); this.onEvent('action', { move: 'rage', seq: res.seq }); }
+  }
+
+  applyRemoteAction({ move, seq }) {
     const r = this.remote;
-    const res = r.tryAttack(kind);
-    if (res && kind === 'special') sfx.special();
+    const m = getMove(move);
+    if (!m) return;
+    if (this.phase !== 'fight') return;
+    r.attackSeq = Math.max(r.attackSeq, seq);
+    r.attack = { move: m, id: move, t: 0, didHit: true, seq };
+    r.state = 'attack'; r.stateT = 0; r.blocking = false;
+    if (move === 'rage') sfx.rage();
   }
 
-  // 원격 스냅샷 적용
   applyRemoteSnapshot(snap) {
     this.remote.applySnapshot(snap);
   }
 
-  step(localInput, dtFrames = 1, net = null) {
-    for (let i = 0; i < dtFrames; i++) this.tick(localInput, net);
+  step(localRaw, net) {
+    // 저속 연출
+    let n = 1;
+    if (this.slowT > 0) { this.slowT -= 1; if (this.slowT % 2 === 0) n = 0; }
+    if (this.hitstop > 0) { this.hitstop -= 1; n = 0; }
+    for (let i = 0; i < n; i++) this.tick(localRaw, net);
     this.render();
   }
 
-  tick(localInput, net) {
-    if (this.hitstop > 0) { this.hitstop -= 1; return; }
+  tick(localRaw, net) {
     this.phaseT += 1;
+    this.updateParticles();
+
+    if (this.announce) {
+      this.announce.t += 1;
+      if (this.announce.t >= this.announce.dur) {
+        const was = this.announce.text;
+        this.announce = null;
+        if (this.phase === 'announce') {
+          if (was.startsWith('ROUND')) { this.say('FIGHT!', '', 32, 56); sfx.fight(); }
+          else if (was === 'FIGHT!') this.phase = 'fight';
+        }
+      }
+    }
 
     if (this.phase === 'fight') {
       this.time -= 1 / 60;
-      // 로컬 파이터 시뮬레이션
-      if (this.localSide === 'p1') {
-        this.p1.update(localInput, this.p2);
-        if (!net) this.cpuControl(this.p2, this.p1); // 솔로: CPU
-        else this.p2.update({ left: false, right: false }, this.p1);
-      } else {
-        this.p2.update(localInput, this.p1);
-        this.p1.update({ left: false, right: false }, this.p2);
+      const locked = this.phase !== 'fight' || !!this.announce;
+      const empty = {};
+      const rawFor = (side) => (locked ? empty : (side === this.localSide ? localRaw : empty));
+      if (this.cpuP1) this.cpu(this.p1, this.p2);
+      else this.p1.update(rawFor('p1'), this.p2);
+      if (this.cpuP2) this.cpu(this.p2, this.p1);
+      else this.p2.update(rawFor('p2'), this.p1);
+      // 콤보 리셋 감지 (착지)
+      for (const [me, foe, key] of [[this.p1, this.p2, 'p2'], [this.p2, this.p1, 'p1']]) {
+        if (foe.state === 'down' && foe.downT <= 1 && this.combo[key]) {
+          this.combo[key] = null;
+        }
       }
-
-      // 타격 판정 (양쪽)
       this.checkHit(this.p1, this.p2, net, 'p1');
       this.checkHit(this.p2, this.p1, net, 'p2');
-
-      // 라운드 종료 체크
       const dead1 = this.p1.hp <= 0, dead2 = this.p2.hp <= 0;
       if (dead1 || dead2 || this.time <= 0) this.endRound(dead1, dead2);
-    } else {
-      // 연출 페이즈: 물리만
+    } else if (this.phase === 'ko' || this.phase === 'roundEnd') {
       this.p1.update({}, this.p2);
       this.p2.update({}, this.p1);
       if (this.phaseT > 150) {
-        if (this.phase === 'matchEnd') { /* 대기 */ }
-        else {
-          this.round += 1;
-          this.resetRound();
-        }
+        if (this.round >= 99) return;
+        this.round += 1;
+        this.startRound();
+      }
+    } else if (this.phase === 'matchEnd' || this.phase === 'announce') {
+      if (this.phase === 'matchEnd') {
+        this.p1.update({}, this.p2);
+        this.p2.update({}, this.p1);
       }
     }
 
     if (this.shake > 0) this.shake -= 1;
   }
 
+  // ── 타격 판정 (공격자 측 판정) ──
   checkHit(att, def, net, side) {
-    const box = att.attackBox;
-    if (!box || att.attack.didHit) return;
+    const atk = att.attack;
+    if (!atk || atk.didHit) return;
+    // 잡기는 별도 처리
+    if (atk.move.grab) { this.checkGrab(att, def, net, side); return; }
+    const box = att.attackBox();
+    if (!box) return;
     const d = def.bodyBox();
     const overlap = box.x < d.x + d.w && box.x + box.w > d.x && box.y < d.y + d.h && box.y + box.h > d.y;
     if (!overlap) return;
-    att.attack.didHit = true;
-    const m = MOVES[att.attack.kind];
-    const blocked = def.blocking && ((def.facing === 1 && def.x <= att.x) || (def.facing === -1 && def.x >= att.x));
-    // 데미지는 공격자 측에서 판정 → 상대에게 이벤트 전송
-    def.applyHit({ dmg: m.dmg, push: m.push, stun: m.stun, fromX: att.x, blocked });
-    att.gainMeter(m.meter);
-    def.gainMeter(6);
-    this.hitstop = blocked ? 4 : 8;
-    this.shake = blocked ? 3 : 7;
-    if (blocked) sfx.block();
-    else if (att.attack.kind === 'punch') sfx.punch();
-    else sfx.kick();
-    // P2P: 내가 때린 판정만 전송 (중복 데미지 방지)
-    const iAmAttacker = (this.localSide === side);
-    if (net && iAmAttacker) {
-      net.sendHit({ dmg: m.dmg, push: m.push, stun: m.stun, blocked, atkSeq: att.attack.seq });
+    if (def.state === 'down') return;
+    if (def.state === 'air' && atk.move.h === 'l') return; // 하단은 공중 whiff
+    if (def.state === 'grabVictim') return;
+
+    atk.didHit = true;
+    const m = atk.move;
+    const ch = !!(def.attack && def.attack.t < def.attack.move.st + 2);
+    // 가드 판정 (철권식: 서서 h/m, 앉아 l, ub 불가)
+    let blocked = false;
+    if (!m.rageMove && def.blocking && def.state !== 'air' && m.h !== 'ub') {
+      blocked = m.h === 'l' ? def.crouchBlock : !def.crouchBlock;
     }
+
+    const iAmAttacker = this.localSide === side;
+    // 솔로: 양쪽 다 로컬 판정. P2P: 공격자 측만 판정 전송, 피격자는 hit 이벤트로 적용.
+    const authoritative = !net || this.localSide === side;
+    if (!authoritative) return;
+
+    const key = side;
+    const combo = this.combo[key];
+    const airHit = def.state === 'air';
+    const count = airHit ? (combo ? combo.hits : 0) : 0;
+    const scale = airHit ? (COMBO_SCALE[Math.min(count, COMBO_SCALE.length - 1)]) : 1;
+    let dmg = Math.max(1, Math.round(m.dmg * att.char.power * scale * (ch ? 1.3 : 1) * (att.rage ? 1.1 : 1)));
+
+    if (blocked) {
+      const chip = Math.min(def.hp, 2 + Math.round(dmg * 0.06));
+      def.applyHit({ dmg: chip, push: 2.5, type: 'block', fromX: att.x, stun: 10 + Math.round(dmg * 0.25) });
+      this.hitstop = 3; this.shake = 2;
+      sfx.block();
+      this.spark(def.x - def.facing * 14, def.centerY, 4, '#7db8ff');
+      if (net && iAmAttacker) net.sendHit({ dmg: chip, push: 2.5, type: 'block', stun: 10 + Math.round(dmg * 0.25) });
+      return;
+    }
+
+    // 스크류
+    if (m.screw && airHit && def.screwOk) {
+      def.applyHit({ dmg, push: 2, type: 'screw', fromX: att.x });
+      this.bumpCombo(key, dmg, true);
+      this.hitstop = 10; this.shake = 6;
+      sfx.screw();
+      this.spark(def.x, def.centerY, 14, '#4df3ff');
+      this.say2('SCREW!', side);
+      if (net && iAmAttacker) net.sendHit({ dmg, push: 2, type: 'screw' });
+      return;
+    }
+
+    // 런처 / 공중타
+    if (m.launch && !airHit) {
+      const vy = m.launch * (1.18 - 0.16 * def.char.weight);
+      def.applyHit({ dmg, push: 2, type: 'launch', fromX: att.x, launchVy: vy });
+      this.bumpCombo(key, dmg, false);
+      this.hitstop = m.electric ? 12 : 8; this.shake = m.electric ? 8 : 5;
+      if (m.electric) { sfx.electric(); this.spark(def.x, def.centerY - 20, 20, '#bfe9ff'); }
+      else sfx.launch();
+      this.spark(att.x + att.facing * m.range * 0.8, def.centerY, 10, '#ffd75e');
+      if (net && iAmAttacker) net.sendHit({ dmg, push: 2, type: 'launch', launchVy: vy });
+      return;
+    }
+    if (airHit) {
+      const vy = Math.min(def.vy - 1.6, -2.2);
+      def.applyHit({ dmg, push: 1.5, type: 'hit', fromX: att.x, launchVy: vy });
+      // applyHit가 air 유지: state가 air였으므로 'hit' 대신 air 팝업 처리
+      def.state = 'air'; def.vy = vy; def.onGround = false;
+      this.bumpCombo(key, dmg, false);
+      this.hitstop = 5; this.shake = 4;
+      m.h === 'l' ? sfx.kick() : (atk.id === 'm1' || atk.id === 'm2' ? sfx.punch() : sfx.kick());
+      this.spark(def.x, def.centerY, 8, '#fff');
+      if (net && iAmAttacker) net.sendHit({ dmg, push: 1.5, type: 'air', launchVy: vy });
+      return;
+    }
+
+    // 지상타
+    const type = m.kd ? 'kd' : 'hit';
+    const stun = 14 + Math.round(m.dmg * 0.4);
+    def.applyHit({ dmg, push: m.push || 2.5, type, fromX: att.x, stun });
+    this.hitstop = m.heavy ? 10 : 6; this.shake = m.heavy ? 7 : 4;
+    if (m.heavy) sfx.heavy();
+    else if (m.btn === 3 || m.btn === 4) sfx.kick();
+    else sfx.punch();
+    this.spark(att.x + att.facing * m.range * 0.8, def.centerY, m.heavy ? 14 : 8, ch ? '#ff5a5a' : '#ffd75e');
+    if (ch) this.say2('COUNTER!', side);
+    if (net && iAmAttacker) net.sendHit({ dmg, push: m.push || 2.5, type, stun });
   }
 
-  // 원격에서 온 타격 판정 적용 (이미 checkHit 한 쪽과 중복 방지: 원격 공격자의 판정만 받음)
-  applyRemoteHit({ dmg, push, stun, blocked }) {
-    const def = this.local;
-    const att = this.remote;
-    // 이미 로컬에서 같은 공격에 맞았으면 무시 (hp가 이미 깎임)
-    def.applyHit({ dmg, push, stun, fromX: att.x, blocked });
-    this.hitstop = blocked ? 4 : 8;
-    this.shake = blocked ? 3 : 7;
-    if (blocked) sfx.block(); else sfx.punch();
+  checkGrab(att, def, net, side) {
+    const atk = att.attack;
+    const box = att.attackBox();
+    if (!box) return;
+    const t = atk.t, m = atk.move;
+    if (t < m.st || t > m.st + m.ac || atk.didHit) return;
+    const d = def.bodyBox();
+    const overlap = box.x < d.x + d.w && box.x + box.w > d.x;
+    const authoritative = !net || this.localSide === side;
+    if (!overlap || def.state === 'air' || def.state === 'down' || def.state === 'grabVictim') {
+      if (t >= m.st + m.ac && !atk.didHit) { atk.didHit = true; } // 헛잡기
+      return;
+    }
+    if (!authoritative) return;
+    atk.didHit = true;
+    let dmg = Math.round(m.dmg * att.char.power * (att.char.throwBonus || 1));
+    def.applyHit({ dmg, type: 'grab', fromX: att.x });
+    sfx.throw();
+    this.hitstop = 8; this.shake = 6;
+    this.spark(def.x, def.centerY, 12, '#ff9f1c');
+    this.say2('THROW!', side);
+    if (net && this.localSide === side) net.sendHit({ dmg, type: 'grab' });
+  }
+
+  applyRemoteHit(h) {
+    const def = this.local, att = this.remote;
+    if (h.type === 'air') {
+      def.applyHit({ dmg: h.dmg, push: h.push, type: 'hit', fromX: att.x, launchVy: h.launchVy });
+      def.state = 'air'; def.vy = h.launchVy; def.onGround = false;
+    } else {
+      def.applyHit({ dmg: h.dmg, push: h.push, type: h.type, fromX: att.x, launchVy: h.launchVy, stun: h.stun });
+    }
+    this.hitstop = 5; this.shake = 4;
+    sfx.punch();
+  }
+
+  bumpCombo(side, dmg, screw) {
+    const c = this.combo[side] || (this.combo[side] = { hits: 0, dmg: 0 });
+    c.hits += 1; c.dmg += dmg;
+    if (screw) c.screw = true;
+  }
+
+  say2(text, side) {
+    this.floatText = { text, side, t: 0 };
   }
 
   endRound(dead1, dead2) {
@@ -154,22 +315,51 @@ export class Game {
     else if (dead2) winner = 'p1';
     else winner = this.p1.hp === this.p2.hp ? null : (this.p1.hp > this.p2.hp ? 'p1' : 'p2');
 
+    this.phase = 'ko';
+    this.phaseT = 0;
+    this.slowT = 46;
+    this.timeScale = 1;
+    if (this.demo) {
+      setTimeout(() => {}, 0);
+      this.demoReset = 90;
+      sfx.ko();
+      this.say(dead1 && dead2 ? 'DOUBLE K.O.!' : 'K.O.!', '', 80, 64);
+      return;
+    }
+    if (this.time <= 0 && !dead1 && !dead2) {
+      sfx.ko();
+      this.say('TIME UP', '', 70, 52);
+    } else {
+      sfx.ko();
+      this.say(dead1 && dead2 ? 'DOUBLE K.O.!' : 'K.O.!', '', 70, 64);
+    }
+    this.pendingWinner = winner;
+    this.pendingPerfect = winner ? this[winner].hp >= this[winner].maxHp : false;
+  }
+
+  finishRound() {
+    const winner = this.pendingWinner;
     if (winner) {
       this.wins[winner] += 1;
+      if (this.pendingPerfect) {
+        this.perfects[winner] += 1;
+        this.say('PERFECT!', '', 60, 48);
+      }
       this[winner].state = 'win';
-      this[winner === 'p1' ? 'p2' : 'p1'].state = this[winner === 'p1' ? this.p2.hp <= 0 : this.p1.hp <= 0] ? 'down' : 'lose';
-      sfx.ko();
+      const loser = winner === 'p1' ? this.p2 : this.p1;
+      if (loser.hp <= 0) loser.state = 'down';
+      else loser.state = 'lose';
       this.onEvent('toast', { text: winner === this.localSide ? '🏆 라운드 승리!' : '💀 라운드 패배…' });
     } else {
       this.onEvent('toast', { text: '🤝 무승부!' });
     }
-
     const champ = this.wins.p1 >= CFG.WIN_ROUNDS ? 'p1' : this.wins.p2 >= CFG.WIN_ROUNDS ? 'p2' : null;
     if (champ) {
       this.phase = 'matchEnd';
       this.phaseT = 0;
+      this[champ].state = 'win';
+      sfx.win();
       this.onEvent('match', { winner: champ, wins: { ...this.wins } });
-      this.onEvent('toast', { text: champ === this.localSide ? '🎉 매치 승리!' : '😭 매치 패배…' });
     } else {
       this.phase = 'roundEnd';
       this.phaseT = 0;
@@ -177,70 +367,243 @@ export class Game {
     }
   }
 
-  cpuControl(cpu, foe) {
-    // 간단한 CPU: 접근 → 랜덤 공격/가드/점프
-    const dx = foe.x - cpu.x;
-    cpu.facing = dx >= 0 ? 1 : -1;
+  // ── CPU ──
+  cpu(me, foe) {
+    this.cpuT += 1;
+    if (this.phase !== 'fight' || this.announce) return;
+    const dx = foe.x - me.x;
+    me.facing = dx >= 0 ? 1 : -1;
     const dist = Math.abs(dx);
-    const t = performance.now() / 1000;
-    const input = { left: false, right: false, jump: false, block: false };
-    if (cpu.state === 'hit' || cpu.attack) { cpu.update(input, foe); return; }
-    if (dist > 110) {
-      if (dx > 0) input.right = true; else input.left = true;
+    const raw = { f: false, b: false, u: false, d: false };
+    const press = (b) => me.input.press(b);
+    if (me.state === 'down') {
+      if (me.downT === 8 && Math.random() < 0.7) press(Math.random() < 0.5 ? 3 : 4);
+      me.update(raw, foe);
+      return;
+    }
+    if (me.attack || me.stun > 0 || me.state === 'air' || me.state === 'grabVictim') {
+      me.update(raw, foe);
+      // 공중 콤보 추격
+      if (foe.state === 'air' && !me.attack && me.onGround && dist < 70 && this.cpuT % 9 === 0) {
+        press([1, 2, 4][Math.floor(Math.random() * 3)]);
+      }
+      return;
+    }
+    // 기상 어택 후 일어남은 자동
+    if (dist > 120) {
+      raw.f = true; // 접근
+      if (Math.random() < 0.02) press(2); // 대시 중 ff+2 노림
+    } else if (dist > 62) {
+      const r = Math.random();
+      if (r < 0.55) raw.f = true;
+      else if (r < 0.62) { raw.f = true; raw.d = true; press(2); } // df+2 런처!
+      else if (r < 0.68) { raw.u = true; press(4); } // 호프킥 시도(근접 공중)
+      else if (r < 0.74) { raw.f = true; raw.d = true; press(1); } // df+1 찌르기
+      else if (r < 0.8) raw.b = true;
+      else if (r < 0.84) { raw.d = true; }
     } else {
       const r = Math.random();
-      if (r < 0.12) cpu.tryAttack(Math.random() < 0.6 ? 'punch' : 'kick');
-      else if (r < 0.2) input.block = true;
-      else if (r < 0.23 && cpu.onGround) input.jump = true;
-      else if (dist > 70) { if (dx > 0) input.right = true; else input.left = true; }
-      else input.block = Math.sin(t * 2) > 0.6;
+      // 가드: 상대 공격 시작 시 1회 판정(35%) 후 유지 — 매틱 판정은 뚫을 수 없음
+      const foeSeq = foe.attack ? foe.attack.seq : -1;
+      if (foeSeq !== me._foeSeq) { me._foeSeq = foeSeq; me._guard = !!(foe.attack && Math.random() < 0.35); }
+      if (me._guard && foe.attack) raw.b = true;
+      else if (r < 0.3) press(1);
+      else if (r < 0.45) { press(1); } // 1연타 → 연계는 버퍼로 자동? (CPU는 직접 2연타)
+      else if (r < 0.55) press(2);
+      else if (r < 0.62) { raw.d = true; press(4); } // 하단
+      else if (r < 0.67 && dist < 44) { press(1); me.input.press(3); } // 잡기 시도
+      else if (r < 0.72) { raw.f = true; raw.d = true; press(2); }
+      else if (r < 0.78) raw.b = true;
+      else if (r < 0.82) { raw.d = true; }
+      else raw.b = Math.random() < 0.4;
     }
-    if (foe.attack && dist < 130 && Math.random() < 0.4) input.block = true;
-    cpu.update(input, foe);
+    if (me.rage && !me.rageUsed && dist < 150 && Math.random() < 0.03) {
+      me.rageUsed = true;
+      me.startMove('rage');
+      sfx.rage();
+    }
+    // 1,1,2 연계: 공격 중이면 후속타 확률
+    if (me.attack && me.attack.move.next && Math.random() < 0.5) {
+      const nx = me.attack.move.next;
+      const btn = Object.keys(nx)[0];
+      if (me.attack.t >= me.attack.move.st) press(Number(btn));
+    }
+    me.update(raw, foe);
   }
 
+  // ── 파티클 ──
+  spark(x, y, n, color) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1 + Math.random() * 3;
+      this.particles.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1,
+        life: 14 + Math.random() * 12, color, size: 1 + Math.random() * 2,
+      });
+    }
+  }
+
+  updateParticles() {
+    for (const p of this.particles) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 1;
+    }
+    this.particles = this.particles.filter((p) => p.life > 0);
+    if (this.floatText) {
+      this.floatText.t += 1;
+      if (this.floatText.t > 50) this.floatText = null;
+    }
+    // 어트랙트 리셋
+    if (this.demoReset) {
+      this.demoReset -= 1;
+      if (this.demoReset <= 0) {
+        this.demoReset = 0;
+        this.p1.resetRound(150, 1);
+        this.p2.resetRound(330, -1);
+        this.time = CFG.ROUND_TIME;
+        this.phase = 'fight';
+      }
+    }
+    // KO 후 결과 확정 (슬로모 끝)
+    if (this.phase === 'ko' && this.slowT <= 0 && !this.demo && this.phaseT > 60) {
+      this.finishRound();
+    }
+  }
+
+  // ── 렌더 ──
   render() {
     const ctx = this.ctx;
     ctx.save();
-    if (this.shake > 0) ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
-
-    // 배경: 네온 도장
-    const g = ctx.createLinearGradient(0, 0, 0, CFG.H);
-    g.addColorStop(0, '#1a1030');
-    g.addColorStop(0.7, '#241536');
-    g.addColorStop(1, '#0d0d18');
-    ctx.fillStyle = g;
-    ctx.fillRect(-10, -10, CFG.W + 20, CFG.H + 20);
-
-    // 달 + 관중 LED
-    ctx.fillStyle = '#ffd75e';
-    ctx.beginPath(); ctx.arc(480, 110, 42, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,215,94,.15)';
-    ctx.beginPath(); ctx.arc(480, 110, 70, 0, Math.PI * 2); ctx.fill();
-    for (let i = 0; i < 40; i++) {
-      ctx.fillStyle = `hsl(${(i * 37 + Date.now() / 50) % 360} 80% 60% / .5)`;
-      ctx.fillRect(20 + i * 23, 190 + Math.sin(i * 1.7) * 8, 10, 4);
+    if (this.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * this.shake), Math.round((Math.random() - 0.5) * this.shake));
+    this.drawStage(ctx);
+    const s1 = this.sheets[this.p1.charId], s2 = this.sheets[this.p2.charId];
+    if (s1 && s2) {
+      // 뒤에 있는(위쪽 y?) — 같은 지면이므로 p2 먼저
+      this.p2.draw(ctx, s2.img, s2.meta);
+      this.p1.draw(ctx, s1.img, s1.meta);
     }
-    // 도장 바닥
-    ctx.fillStyle = '#2c2140';
-    ctx.fillRect(0, CFG.GROUND_Y + 4, CFG.W, CFG.H - CFG.GROUND_Y);
-    ctx.strokeStyle = '#e63b5f';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(120, CFG.GROUND_Y - 130, CFG.W - 240, 140);
-    ctx.fillStyle = 'rgba(230,59,95,.12)';
-    ctx.fillRect(120, CFG.GROUND_Y - 130, CFG.W - 240, 140);
+    // 파티클
+    for (const p of this.particles) {
+      ctx.globalAlpha = Math.min(1, p.life / 12);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+    this.drawCombo(ctx);
+    this.drawAnnounce(ctx);
+    ctx.restore();
+  }
 
-    this.p1.draw(ctx);
-    this.p2.draw(ctx);
+  drawStage(ctx) {
+    const W = CFG.W, H = CFG.H, GY = CFG.GROUND_Y;
+    // 석양 하늘
+    const g = ctx.createLinearGradient(0, 0, 0, GY);
+    g.addColorStop(0, '#2a1a4e');
+    g.addColorStop(0.45, '#8e2f5c');
+    g.addColorStop(0.75, '#e8703a');
+    g.addColorStop(1, '#f7b733');
+    ctx.fillStyle = g;
+    ctx.fillRect(-8, -8, W + 16, GY + 8);
+    // 태양
+    ctx.fillStyle = '#ffe9a8';
+    ctx.beginPath(); ctx.arc(240, 168, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,233,168,.25)';
+    ctx.beginPath(); ctx.arc(240, 168, 40, 0, Math.PI * 2); ctx.fill();
+    // 오층탑 실루엣
+    ctx.fillStyle = '#3a2044';
+    const pagoda = (x, s) => {
+      for (let i = 0; i < 4; i++) {
+        const w = (44 - i * 8) * s, y = 150 - i * 22 * s;
+        ctx.fillRect(x - w / 2, y, w, 5 * s);
+        ctx.fillRect(x - w / 4, y + 5 * s, w / 2, 12 * s);
+      }
+    };
+    pagoda(70, 1); pagoda(415, 1.25); pagoda(330, 0.7);
+    // 산 실루엣
+    ctx.fillStyle = '#4a2a52';
+    ctx.beginPath();
+    ctx.moveTo(-8, GY);
+    for (let x = -8; x <= W + 8; x += 32) ctx.lineTo(x, 196 - Math.abs(Math.sin(x * 0.05)) * 26);
+    ctx.lineTo(W + 8, GY); ctx.closePath(); ctx.fill();
+    // 바닥 (석판)
+    ctx.fillStyle = '#5c4a3a';
+    ctx.fillRect(-8, GY, W + 16, H - GY + 8);
+    ctx.fillStyle = '#6e5a46';
+    ctx.fillRect(-8, GY, W + 16, 6);
+    // 석판 격자 (원근)
+    ctx.strokeStyle = 'rgba(0,0,0,.35)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 12; i++) {
+      const x = (i / 12) * W;
+      ctx.beginPath(); ctx.moveTo(240 + (x - 240) * 0.4, GY + 6); ctx.lineTo(x, H + 8); ctx.stroke();
+    }
+    for (let i = 0; i < 4; i++) {
+      const y = GY + 6 + (i / 4) * (H - GY);
+      ctx.beginPath(); ctx.moveTo(-8, y); ctx.lineTo(W + 8, y); ctx.stroke();
+    }
+    // 횃불
+    const flick = 0.7 + 0.3 * Math.sin(Date.now() / 90);
+    for (const x of [26, 454]) {
+      ctx.fillStyle = '#3a2a20';
+      ctx.fillRect(x - 2, GY - 46, 4, 46);
+      ctx.fillStyle = `rgba(255,${140 + Math.round(60 * flick)},40,.9)`;
+      ctx.beginPath(); ctx.arc(x, GY - 52, 5 * flick + 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
 
-    // KO / 라운드 텍스트
-    if (this.phase !== 'fight') {
-      ctx.fillStyle = 'rgba(0,0,0,.45)';
-      ctx.fillRect(0, 0, CFG.W, CFG.H);
+  drawCombo(ctx) {
+    const draw = (f, side, align) => {
+      const c = this.combo[side];
+      if (!c || c.hits < 2) return;
+      const x = align === 'left' ? 26 : CFG.W - 26;
+      ctx.textAlign = align;
+      ctx.font = 'italic 900 22px Georgia, serif';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#400';
+      const y = 96;
+      ctx.strokeText(`${c.hits} HITS`, x, y);
+      ctx.fillStyle = '#ff3b30';
+      ctx.fillText(`${c.hits} HITS`, x, y);
+      ctx.font = 'bold 11px monospace';
       ctx.fillStyle = '#ffd75e';
-      ctx.font = '900 72px system-ui';
+      ctx.fillText(`${c.dmg} dmg`, x, y + 14);
+    };
+    draw(this.p1, 'p1', 'left');
+    draw(this.p2, 'p2', 'right');
+    if (this.floatText) {
+      const f = this.floatText.side === 'p1' ? this.p1 : this.p2;
       ctx.textAlign = 'center';
-      ctx.fillText(this.phase === 'matchEnd' ? 'K.O.' : `ROUND ${this.round} END`, CFG.W / 2, CFG.H / 2);
+      ctx.font = 'italic 900 16px Georgia, serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#000';
+      ctx.strokeText(this.floatText.text, f.x, f.y - 116 - this.floatText.t * 0.3);
+      ctx.fillStyle = '#ffe45e';
+      ctx.fillText(this.floatText.text, f.x, f.y - 116 - this.floatText.t * 0.3);
+    }
+  }
+
+  drawAnnounce(ctx) {
+    if (!this.announce) return;
+    const a = this.announce;
+    const p = a.t / a.dur;
+    const scale = p < 0.15 ? 0.5 + (p / 0.15) * 0.5 : 1;
+    ctx.save();
+    ctx.translate(CFG.W / 2, CFG.H / 2 - 20);
+    ctx.scale(scale, scale);
+    ctx.textAlign = 'center';
+    ctx.font = `italic 900 ${a.size}px Georgia, serif`;
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#1a0000';
+    ctx.strokeText(a.text, 0, 0);
+    const grad = ctx.createLinearGradient(0, -a.size, 0, 0);
+    grad.addColorStop(0, '#fff8e0');
+    grad.addColorStop(0.5, '#ffd75e');
+    grad.addColorStop(1, '#ff5a2a');
+    ctx.fillStyle = grad;
+    ctx.fillText(a.text, 0, 0);
+    if (a.sub) {
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(a.sub, 0, 22);
     }
     ctx.restore();
   }
