@@ -69,7 +69,7 @@ function toast(text, ms = 1800) {
 function onEvent(type, data) {
   if (type === 'toast') toast(data.text);
   if (type === 'round') {
-    $('round').textContent = `ROUND ${data.round} · 먼저 ${CFG.WIN_ROUNDS}승`;
+    $('round').textContent = `R${data.round} · ${CFG.WIN_ROUNDS}선승`;
     updatePips();
   }
   if (type === 'match') {
@@ -345,10 +345,53 @@ $('roomPill').onclick = () => {
   if (roomCode) navigator.clipboard?.writeText(roomCode).then(() => toast('방 코드 복사됨!'));
 };
 
-bindHold('tLeft', 'left');
-bindHold('tRight', 'right');
-bindHold('tDown', 'down');
-bindHold('tUp', 'up');
+// ---------- 가상 조이스틱 (터치 전용, 대전 중에만 동작) ----------
+const joy = { id: null, cx: 0, cy: 0 };
+const joyZone = $('joyZone'), joyEl = $('joy'), knob = $('joyKnob');
+const JOY_R = 44, JOY_DEAD = 10;
+function stagePoint(t) {
+  const r = $('stage').getBoundingClientRect();
+  return { x: t.clientX - r.left, y: t.clientY - r.top };
+}
+joyZone.addEventListener('touchstart', (e) => {
+  if (screen !== 'fight' || joy.id !== null) return;
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  const p = stagePoint(t);
+  joy.id = t.identifier; joy.cx = p.x; joy.cy = p.y;
+  joyEl.style.display = 'block';
+  joyEl.style.left = (p.x - 55) + 'px';
+  joyEl.style.top = (p.y - 55) + 'px';
+  knob.style.transform = 'translate(0px,0px)';
+  touch.left = touch.right = touch.up = touch.down = false;
+}, { passive: false });
+function joyMove(e) {
+  if (joy.id === null) return;
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joy.id) continue;
+    e.preventDefault();
+    const p = stagePoint(t);
+    let dx = p.x - joy.cx, dy = p.y - joy.cy;
+    const len = Math.hypot(dx, dy);
+    if (len > JOY_R) { dx = dx / len * JOY_R; dy = dy / len * JOY_R; }
+    knob.style.transform = `translate(${dx.toFixed(0)}px,${dy.toFixed(0)}px)`;
+    touch.left = dx < -JOY_DEAD; touch.right = dx > JOY_DEAD;
+    touch.up = dy < -JOY_DEAD; touch.down = dy > JOY_DEAD;
+  }
+}
+function joyEnd(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joy.id) continue;
+    joy.id = null;
+    joyEl.style.display = 'none';
+    touch.left = touch.right = touch.up = touch.down = false;
+  }
+}
+joyZone.addEventListener('touchmove', joyMove, { passive: false });
+joyZone.addEventListener('touchend', joyEnd);
+joyZone.addEventListener('touchcancel', joyEnd);
+// 타이틀 화면 탭으로 시작 (모바일)
+canvas.addEventListener('pointerdown', () => { if (screen === 'title') toMenu(); });
 bindBtn('t1', () => btnPress(1));
 bindBtn('t2', () => btnPress(2));
 bindBtn('t3', () => btnPress(3));
@@ -356,6 +399,7 @@ bindBtn('t4', () => btnPress(4));
 bindBtn('tRage', () => { if (screen === 'fight' && game) game.rageArt(); });
 bindBtn('tSelL', () => handleKey(screen === 'select' ? 'KeyA' : ''));
 bindBtn('tSelR', () => handleKey(screen === 'select' ? 'KeyD' : ''));
+bindBtn('tSelOK', () => handleKey(screen === 'select' ? 'KeyJ' : ''));
 
 function btnPress(b) {
   if (screen === 'select') { handleKey('KeyJ'); return; }
@@ -450,7 +494,7 @@ function drawSelect() {
   ctx.fillStyle = '#ccc';
   ctx.fillText('주요기: ' + c.key.join(' / '), CFG.W - 24, 244);
   ctx.fillStyle = '#888';
-  ctx.fillText(mode === 'solo' ? 'A/D 선택 · J 결정' : 'A/D 선택 · J 결정 · K 해제', CFG.W - 24, 258);
+  ctx.fillText(isTouch ? '◀ ▶ 선택 · 펀치 버튼 결정' : (mode === 'solo' ? 'A/D 선택 · J 결정' : 'A/D 선택 · J 결정 · K 해제'), CFG.W - 24, 258);
   ctx.textAlign = 'center';
 }
 
@@ -490,6 +534,11 @@ function loop() {
 
 function frame(now) {
   requestAnimationFrame(frame);
+  // 터치 UI 화면별 토글
+  document.body.classList.toggle('fighting', screen === 'fight');
+  document.body.classList.toggle('result', screen === 'result');
+  const tsel = $('touchSel');
+  if (tsel) tsel.style.display = (isTouch && screen === 'select') ? 'flex' : 'none';
   let dt = (now - last) / 1000;
   last = now;
   if (dt > 0.1) dt = 0.1;
@@ -544,7 +593,7 @@ function frame(now) {
   $('hp1').style.width = `${(100 * game.p1.hp / game.p1.maxHp).toFixed(1)}%`;
   $('hp2').style.width = `${(100 * game.p2.hp / game.p2.maxHp).toFixed(1)}%`;
   $('timer').textContent = Math.max(0, Math.ceil(game.time));
-  $('round').textContent = `ROUND ${game.round} · 먼저 ${CFG.WIN_ROUNDS}승`;
+  $('round').textContent = `R${game.round} · ${CFG.WIN_ROUNDS}선승`;
   $('rage1').style.visibility = game.p1.rage && game.p1.hp > 0 ? 'visible' : 'hidden';
   $('rage2').style.visibility = game.p2.rage && game.p2.hp > 0 ? 'visible' : 'hidden';
 }
@@ -562,10 +611,7 @@ function drawMenuBg() {
     toast('스프라이트 로드 실패: ' + e.message);
     return;
   }
-  // 터치 셀렉트 버튼
-  if (isTouch) {
-    $('touchSel').style.display = 'flex';
-  }
+  // 부트 완료 후 터치 UI는 frame() 루프에서 화면별로 토글됨
   startDemo();
   loop();
 })();
