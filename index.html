@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Tekken P2P — 철권풍 P2P 격투 게임</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a12; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 30%, #2a1a3a 0%, #0a0a12 70%); }
+  #stage { position: relative; width: min(960px, 100vw); aspect-ratio: 16/9; max-height: 100vh; }
+  canvas { width: 100%; height: 100%; display: block; border-radius: 12px; background: #14141f; box-shadow: 0 20px 80px rgba(0,0,0,.6); touch-action: none; }
+  #hud { position: absolute; top: 0; left: 0; right: 0; padding: 10px 14px; display: none; pointer-events: none; }
+  #hud.visible { display: block; }
+  #bars { display: flex; gap: 10px; align-items: center; }
+  .hpbar { flex: 1; height: 22px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; overflow: hidden; position: relative; }
+  .hpbar .fill { height: 100%; width: 100%; transition: width .15s; }
+  .hpbar.p1 .fill { background: linear-gradient(90deg, #22b573, #a3e635); float: right; }
+  .hpbar.p2 .fill { background: linear-gradient(90deg, #ff4d6d, #ff9f1c); }
+  .hpbar .name { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px; font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 1px 4px #000; }
+  #timer { width: 64px; text-align: center; font-size: 24px; font-weight: 900; color: #ffd75e; text-shadow: 0 2px 8px #000; }
+  #round { text-align: center; font-size: 12px; color: #fff; opacity: .8; margin-top: 4px; }
+  #roomPill { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 999px; padding: 6px 14px; font-size: 13px; pointer-events: auto; cursor: pointer; }
+  #roomPill b { color: #ffd75e; letter-spacing: 2px; }
+  #menu { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,5,12,.78); border-radius: 12px; z-index: 10; }
+  #menu.hidden { display: none; }
+  .card { background: rgba(20,20,35,.95); border: 1px solid rgba(255,255,255,.14); border-radius: 16px; padding: 26px 28px; width: min(430px, 92%); color: #fff; text-align: center; }
+  .card h1 { font-size: 26px; }
+  .card p.sub { opacity: .7; font-size: 13px; margin: 6px 0 14px; line-height: 1.6; }
+  .card input { width: 100%; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.07); color: #fff; font-size: 15px; outline: none; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .row button { flex: 1; }
+  button { padding: 11px 14px; border-radius: 10px; border: none; font-size: 15px; font-weight: 800; cursor: pointer; background: #e63b5f; color: #fff; }
+  button:hover { filter: brightness(1.1); }
+  button.ghost { background: rgba(255,255,255,.14); }
+  button.green { background: #22b573; }
+  .help { margin-top: 14px; font-size: 12px; line-height: 1.8; opacity: .75; text-align: left; }
+  #toast { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 5; }
+  .toast { background: rgba(20,20,40,.92); border: 1px solid rgba(255,255,255,.2); color: #fff; padding: 10px 20px; border-radius: 12px; font-size: 16px; font-weight: 800; animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } }
+  #touchUI { position: absolute; inset: auto 0 0 0; display: none; justify-content: space-between; padding: 0 12px 12px; pointer-events: none; }
+  body.touch #touchUI { display: flex; }
+  .tgroup { display: flex; gap: 8px; pointer-events: auto; }
+  .tgroup button { width: 58px; height: 58px; border-radius: 50%; padding: 0; font-size: 14px; background: rgba(20,20,40,.65); border: 2px solid rgba(255,255,255,.4); touch-action: none; user-select: none; -webkit-user-select: none; }
+  .tgroup button:active { background: rgba(230,59,95,.7); }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game" width="960" height="540"></canvas>
+    <div id="hud">
+      <div id="bars">
+        <div class="hpbar p1"><div class="fill" id="hp1"></div><div class="name" id="name1">P1</div></div>
+        <div id="timer">60</div>
+        <div class="hpbar p2"><div class="fill" id="hp2"></div><div class="name" id="name2" style="justify-content:flex-end">P2</div></div>
+      </div>
+      <div id="round">ROUND 1 · 먼저 2승</div>
+    </div>
+    <div id="toast"></div>
+    <div id="roomPill" style="display:none">방 코드 <b id="roomCode">------</b> 📋</div>
+    <div id="menu">
+      <div class="card">
+        <h1>🥊 Tekken P2P</h1>
+        <p class="sub">서버 없이 방 코드로 맞붙는 1v1 격투 게임<br/>GitHub Pages에서 바로 실행됩니다.</p>
+        <input id="nick" maxlength="12" placeholder="닉네임 (예: 철권왕)" />
+        <input id="code" maxlength="6" placeholder="방 코드 6자리 (참가할 때만)" style="text-transform:uppercase" />
+        <div class="row">
+          <button id="btnCreate" class="green">새 방 만들기</button>
+          <button id="btnJoin">참가하기</button>
+        </div>
+        <div class="row">
+          <button id="btnSolo" class="ghost">혼자 하기 (CPU전)</button>
+        </div>
+        <div class="help">
+          ⌨️ <b>A/D</b> 이동 · <b>W</b> 점프 · <b>S</b> 가드<br/>
+          👊 <b>J</b> 펀치 · 🦵 <b>K</b> 킥 · ✨ <b>L</b> 필살기(게이지 100%)<br/>
+          📱 모바일: 좌우 버튼 이동 + 펀치/킥/가드/점프 버튼
+        </div>
+      </div>
+    </div>
+    <div id="touchUI">
+      <div class="tgroup">
+        <button id="tLeft">◀</button>
+        <button id="tRight">▶</button>
+      </div>
+      <div class="tgroup">
+        <button id="tGuard">🛡</button>
+        <button id="tJump">⬆</button>
+        <button id="tPunch">👊</button>
+        <button id="tKick">🦵</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
