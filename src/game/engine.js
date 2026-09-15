@@ -221,7 +221,7 @@ export class Game {
     if (blocked) {
       const chip = Math.min(def.hp, 2 + Math.round(dmg * 0.06));
       def.applyHit({ dmg: chip, push: 2.5, type: 'block', fromX: att.x, stun: 10 + Math.round(dmg * 0.25) });
-      this.hitstop = 3; this.shake = 2;
+      this.hitstop = 3; this.shake = 3;
       sfx.block();
       this.spark(def.x - def.facing * 14, def.centerY, 4, '#7db8ff');
       this.dmgNum(def.x, def.y - 108, chip, '#9fc4ff');
@@ -233,7 +233,7 @@ export class Game {
     if (m.screw && airHit && def.screwOk) {
       def.applyHit({ dmg, push: 2, type: 'screw', fromX: att.x });
       this.bumpCombo(key, dmg, true);
-      this.hitstop = 10; this.shake = 6;
+      this.hitstop = 10; this.shake = 7;
       sfx.screw();
       this.spark(def.x, def.centerY, 14, '#4df3ff');
       this.dmgNum(def.x, def.y - 118, dmg, '#4df3ff');
@@ -247,7 +247,7 @@ export class Game {
       const vy = m.launch * (1.18 - 0.16 * def.char.weight);
       def.applyHit({ dmg, push: 2, type: 'launch', fromX: att.x, launchVy: vy });
       this.bumpCombo(key, dmg, false);
-      this.hitstop = m.electric ? 12 : 8; this.shake = m.electric ? 8 : 5;
+      this.hitstop = m.electric ? 12 : 8; this.shake = m.electric ? 9 : 6;
       if (m.electric) { sfx.electric(); this.spark(def.x, def.centerY - 20, 20, '#bfe9ff'); }
       else sfx.launch();
       this.spark(att.x + att.facing * m.range * 0.8, def.centerY, 10, '#ffd75e');
@@ -261,7 +261,7 @@ export class Game {
       // applyHit가 air 유지: state가 air였으므로 'hit' 대신 air 팝업 처리
       def.state = 'air'; def.vy = vy; def.onGround = false;
       this.bumpCombo(key, dmg, false);
-      this.hitstop = 5; this.shake = 4;
+      this.hitstop = 5; this.shake = 5;
       m.h === 'l' ? sfx.kick() : (atk.id === 'm1' || atk.id === 'm2' ? sfx.punch() : sfx.kick());
       this.spark(def.x, def.centerY, 8, '#fff');
       this.dmgNum(def.x, def.y - 118, dmg, '#fff');
@@ -273,7 +273,7 @@ export class Game {
     const type = m.kd ? 'kd' : 'hit';
     const stun = 14 + Math.round(m.dmg * 0.4);
     def.applyHit({ dmg, push: m.push || 2.5, type, fromX: att.x, stun });
-    this.hitstop = m.heavy ? 8 : 4; this.shake = m.heavy ? 7 : 4;
+    this.hitstop = m.heavy ? 8 : 4; this.shake = m.heavy ? 9 : 5;
     if (m.heavy) sfx.heavy();
     else if (m.btn === 3 || m.btn === 4) sfx.kick();
     else sfx.punch();
@@ -301,7 +301,7 @@ export class Game {
     let dmg = Math.round(m.dmg * att.char.power * (att.char.throwBonus || 1));
     def.applyHit({ dmg, type: 'grab', fromX: att.x });
     sfx.throw();
-    this.hitstop = 8; this.shake = 6;
+    this.hitstop = 8; this.shake = 7;
     this.spark(def.x, def.centerY, 12, '#ff9f1c');
     this.dmgNum(def.x, def.y - 112, dmg, '#ff9f1c');
     this.say2('THROW!', side);
@@ -318,7 +318,7 @@ export class Game {
     }
     this.dmgNum(def.x, def.y - 112, h.dmg, h.type === 'block' ? '#9fc4ff' : '#fff');
     if (h.type === 'launch' || h.type === 'screw') this.bumpCombo(this.localSide === 'p1' ? 'p2' : 'p1', h.dmg, h.type === 'screw');
-    this.hitstop = 5; this.shake = 4;
+    this.hitstop = 5; this.shake = 5;
     sfx.punch();
   }
 
@@ -561,7 +561,6 @@ export class Game {
       ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
     }
     ctx.globalAlpha = 1;
-    this.drawSwoosh(ctx);
     this.drawDmgNums(ctx);
     this.drawCombo(ctx);
     this.drawAnnounce(ctx);
@@ -576,29 +575,6 @@ export class Game {
       f._wasG = f.onGround;
     }
     ctx.restore();
-  }
-
-  // 공격 검기 (타격점 스윙 아크)
-  drawSwoosh(ctx) {
-    for (const f of [this.p1, this.p2]) {
-      const a = f.attack;
-      if (!a) continue;
-      const m = a.move, t = a.t;
-      if (t < m.st || t > m.st + m.ac || m.grab) continue;
-      const p = (t - m.st + 1) / (m.ac + 1);
-      const cx = f.x + f.facing * m.range * 0.45;
-      const cy = f.centerY - 8;
-      const r = m.range * (0.45 + 0.55 * p);
-      const c = f.facing === 1 ? 0 : Math.PI;
-      ctx.save();
-      ctx.globalAlpha = 0.8 * (1 - p * 0.55);
-      ctx.strokeStyle = m.electric ? '#bfe9ff' : m.heavy ? '#ff9f1c' : '#ffffff';
-      ctx.lineWidth = 6 * (1 - p) + 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, c - 1.0, c + 1.0);
-      ctx.stroke();
-      ctx.restore();
-    }
   }
 
   drawDmgNums(ctx) {
