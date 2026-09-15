@@ -271,7 +271,7 @@ function drawTrain() {
   ctx.textAlign = 'left';
   items.forEach((inp, i) => {
     const y = CFG.H - 14 - (items.length - 1 - i) * 17;
-    const d = isTouch ? toArrow(inp.dir, inp.face || 1) : inp.dir;
+    const d = toArrow(inp.dir, inp.face || 1);
     const txt = inp.btn ? `${d} ${inp.btn}` : d;
     ctx.font = 'bold 11px monospace';
     ctx.fillStyle = inp.btn ? 'rgba(230,59,95,.85)' : 'rgba(255,255,255,.55)';
