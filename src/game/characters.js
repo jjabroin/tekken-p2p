@@ -6,11 +6,11 @@
 export const MOVES = {
   // --- 기본 손 (빠른 발동) ---
   m1:   { n: '1', btn: 1, st: 5, ac: 3, rc: 5, dmg: 7, range: 46, h: 'h', next: { 1: 'm11', 2: 'm12' }, anim: ['jab1', 'jab2'] },
-  m11:  { n: '1,1', btn: 1, st: 6, ac: 3, rc: 7, dmg: 8, range: 46, h: 'h', next: { 2: 'm112' }, anim: ['jab2', 'jab4'] },
-  m112: { n: '1,1,2', btn: 2, st: 10, ac: 4, rc: 17, dmg: 14, range: 50, h: 'm', kd: true, push: 5, anim: ['cross1', 'cross2', 'cross3'] },
-  m2:   { n: '2', btn: 2, st: 7, ac: 3, rc: 7, dmg: 9, range: 48, h: 'h', next: { 1: 'm21' }, anim: ['cross1', 'cross2'] },
-  m21:  { n: '2,1', btn: 1, st: 8, ac: 3, rc: 8, dmg: 10, range: 48, h: 'm', anim: ['jab2', 'jab3'] },
-  m12:  { n: '1,2', btn: 2, st: 8, ac: 3, rc: 8, dmg: 11, range: 48, h: 'h', anim: ['cross2', 'cross3'] },
+  m11:  { n: '1,1', btn: 1, st: 6, ac: 3, rc: 7, dmg: 8, range: 46, h: 'h', chainOnly: true, next: { 2: 'm112' }, anim: ['jab2', 'jab4'] },
+  m112: { n: '1,1,2', btn: 2, st: 10, ac: 4, rc: 17, dmg: 14, range: 50, h: 'm', chainOnly: true, kd: true, push: 5, anim: ['cross1', 'cross2', 'cross3'] },
+  m2:   { n: '2', btn: 2, st: 6, ac: 3, rc: 5, dmg: 9, range: 48, h: 'h', next: { 1: 'm21' }, anim: ['cross1', 'cross2'] },
+  m21:  { n: '2,1', btn: 1, st: 8, ac: 3, rc: 6, dmg: 10, range: 48, h: 'm', chainOnly: true, anim: ['jab2', 'jab3'] },
+  m12:  { n: '1,2', btn: 2, st: 8, ac: 3, rc: 6, dmg: 11, range: 48, h: 'h', chainOnly: true, anim: ['cross2', 'cross3'] },
   // --- 앞 방향기 ---
   f1:   { n: 'f+1', btn: 1, dir: 'f', st: 8, ac: 3, rc: 11, dmg: 10, range: 50, h: 'm', push: 3, anim: ['jab2', 'cross2'] },
   f3:   { n: 'f+3', btn: 3, dir: 'f', st: 11, ac: 4, rc: 14, dmg: 12, range: 58, h: 'm', push: 3, anim: ['lk0', 'lk1', 'lk2'] },
@@ -31,7 +31,7 @@ export const MOVES = {
   d3:   { n: 'd+3', btn: 3, crouch: true, st: 10, ac: 4, rc: 12, dmg: 8, range: 54, h: 'l', anim: ['lk0', 'lk1', 'lk2'] },
   d4:   { n: 'd+4', btn: 4, crouch: true, st: 13, ac: 4, rc: 17, dmg: 12, range: 58, h: 'l', kd: true, push: 4, anim: ['rk1', 'rk2', 'rk3'] },
   d2:   { n: 'd+2', btn: 2, crouch: true, st: 9, ac: 3, rc: 11, dmg: 7, range: 46, h: 'l', next: { 3: 'd23' }, anim: ['jab1', 'jab2'] },
-  d23:  { n: 'd+2,3', btn: 3, st: 10, ac: 4, rc: 14, dmg: 10, range: 54, h: 'l', anim: ['lk1', 'lk2', 'lk1'] },
+  d23:  { n: 'd+2,3', btn: 3, st: 10, ac: 4, rc: 14, dmg: 10, range: 54, h: 'l', chainOnly: true, anim: ['lk1', 'lk2', 'lk1'] },
   db3:  { n: 'db+3', btn: 3, dir: 'db', st: 12, ac: 4, rc: 14, dmg: 9, range: 54, h: 'l', anim: ['lk1', 'lk2', 'lk0'] },
   db4:  { n: 'db+4 스위프', btn: 4, dir: 'db', st: 15, ac: 4, rc: 18, dmg: 13, range: 60, h: 'l', kd: true, push: 5, anim: ['rk1', 'rk2', 'rk3'] },
   ws1:  { n: 'ws+1', btn: 1, rise: true, st: 9, ac: 3, rc: 11, dmg: 9, range: 48, h: 'm', anim: ['jab1', 'jab2'] },

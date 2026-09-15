@@ -119,7 +119,7 @@ export class Fighter {
       for (const id of this.char.moves) {
         const m = getMove(id);
         if (!m || m.btn === 0 || String(m.btn) !== q.code) continue;
-        if (m.down || m.air || m.rageMove || m.special) continue;
+        if (m.down || m.air || m.rageMove || m.special || m.chainOnly) continue;
         if (m.dash && !q.dashF) continue;
         if (m.rise && !q.rise) continue;
         if (pass === 0) {
