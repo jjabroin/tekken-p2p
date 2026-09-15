@@ -1,7 +1,8 @@
 # 🥊 IRON FIST P2P
 
 서버 없이 방 코드로 맞붙는 **철권식 도트 격투 게임**. **GitHub Pages**에서 바로 실행됩니다.
-베이스: Canvas 2D(480×270 저해상도 + 스캔라인) + [Trystero](https://github.com/dmotz/trystero) torrent 전략(WebRTC P2P, 서버 불필요).
+베이스: Canvas 2D(480×270 저해상도 + 스캔라인) + 공개 MQTT 브로커 경유 실시간 통신(서버 불필요, NAT 무관).
+라운드 시간제한 없음 — KO까지 무제한 대전.
 
 > 상표권 회피를 위해 제목·캐릭터는 오리지널(패러디)이며, 표기법·시스템만 철권식을 따릅니다.
 > 파이터 스프라이트는 CC0 라이선스 기반입니다 (아래 크레딧 참고).
@@ -84,7 +85,7 @@ tools/build_sprites.py  팔레트 스왑 아틀라스 빌더
 src/
   game/  config · characters(무브리스트) · input(철권 입력버퍼)
          fighter(상태머신/스프라이트) · engine(판정/콤보/스테이지/CPU) · audio(신스)
-  net/   p2p(Trystero 룸 v2: 상태/액션/타격/선택동기/리매치)
+  net/   p2p(MQTT 토픽/룸: 상태/액션/타격/선택동기/리매치 + 끊김 자동재접속)
   main.js  타이틀/메뉴/셀렉트/VS/대전/결과 화면 상태머신
 ```
 

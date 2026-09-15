@@ -340,6 +340,12 @@ function connectNet() {
   try {
   net = createNet({
     code: roomCode,
+    onDown: () => {
+      if (mode === 'p2p' && (screen === 'select' || screen === 'fight' || screen === 'vs')) {
+        toast('서버 연결 실패 😢 네트워크를 확인하고 다시 시도해주세요');
+        toMenu();
+      }
+    },
     onPeerJoin: () => { markRx(); seenPeer = true; toast('👋 상대가 입장했습니다!'); broadcastHello(); },
     onPeerLeave: () => toast('상대가 나갔습니다'),
     onHello: (h) => {
@@ -772,7 +778,7 @@ function frame(now) {
     $('timer').textContent = '∞';
     $('round').textContent = `연습중 · 더미:${DUMMY_LABEL[game.trainDummyMode] || ''}`;
   } else {
-    $('timer').textContent = Math.max(0, Math.ceil(game.time));
+    $('timer').textContent = '∞';
     $('round').textContent = `R${game.round} · ${CFG.WIN_ROUNDS}선승`;
   }
   $('rage1').style.visibility = game.p1.rage && game.p1.hp > 0 ? 'visible' : 'hidden';
