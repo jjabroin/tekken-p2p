@@ -520,6 +520,7 @@ $('roomPill').onclick = () => {
   if (roomCode) navigator.clipboard?.writeText(roomCode).then(() => toast('방 코드 복사됨!'));
 };
 $('moveBtn').onclick = () => toggleMoves();
+$('moveClose').onclick = () => toggleMoves(false);
 
 // ---------- 가상 조이스틱 (터치 전용, 대전 중에만 동작) ----------
 const joy = { id: null, cx: 0, cy: 0 };

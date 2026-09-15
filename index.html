@@ -55,7 +55,8 @@
   #moveBtn { position: absolute; top: 64px; right: 10px; z-index: 9; width: 40px; height: 40px; border-radius: 10px; background: rgba(10,10,25,.8); border: 1px solid rgba(255,255,255,.3); color: #fff; font-size: 18px; display: none; padding: 0; }
   body.fighting #moveBtn { display: block; }
   #movePanel { position: absolute; top: 56px; right: 10px; bottom: 64px; width: min(250px, 62%); z-index: 11; display: none; background: rgba(8,8,18,.96); border: 2px solid #ffd75e; border-radius: 10px; padding: 10px 12px; overflow-y: auto; color: #fff; -webkit-overflow-scrolling: touch; }
-  .mvHead { font-size: 14px; font-weight: 900; font-style: italic; color: #ffd75e; margin-bottom: 6px; }
+  .mvHead { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 900; font-style: italic; color: #ffd75e; margin-bottom: 6px; }
+  #moveClose { width: 30px; height: 30px; border-radius: 8px; padding: 0; font-size: 14px; background: rgba(255,255,255,.14); flex: none; }
   .mv { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.08); font-family: monospace; }
   .mv span:first-child { color: #ffd75e; font-weight: 800; white-space: nowrap; }
   .mvTip { font-size: 10px; opacity: .6; margin-top: 6px; }  .toast { background: rgba(10,10,25,.92); border: 1px solid rgba(255,255,255,.25); color: #fff; padding: 8px 18px; border-radius: 10px; font-size: 14px; font-weight: 800; animation: pop .25s ease-out; white-space: nowrap; }
@@ -105,7 +106,7 @@
     </div>
     <div id="toast"></div>
     <button id="moveBtn" title="커맨드표 (H)">📋</button>
-    <div id="movePanel"><div class="mvHead" id="moveHead"></div><div id="moveList"></div><div class="mvTip">H 또는 📋로 닫기 · 상/중/하 = 가드 방향</div></div>
+    <div id="movePanel"><div class="mvHead"><span id="moveHead"></span><button id="moveClose" title="닫기">✕</button></div><div id="moveList"></div><div class="mvTip">H / 📋 / ✕로 닫기 · 상/중/하 = 가드 방향</div></div>
     <div id="roomPill">방 코드 <b id="roomCode">------</b> 📋</div>
     <div id="resultBar"><div id="resultTitle">YOU WIN</div><div id="resultSub"></div></div>
     <div id="menu">
