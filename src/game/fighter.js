@@ -91,30 +91,45 @@ export class Fighter {
     }
     // 앉아/일어나기
     if (q.crouch) {
-      for (const id of ['d4', 'd3', 'd2']) {
+      // db 방향기 우선 (앉아+뒤)
+      for (const id of this.char.moves) {
         const m = getMove(id);
-        if (m && String(m.btn) === q.code && has(id) && (id === 'd2' || true)) {
-          if (id === 'd23') continue;
-          return id;
-        }
+        if (m && m.dir === 'db' && String(m.btn) === q.code) return id;
       }
-      // 앉은 상태 일반 버튼은 d3/d4로 폴백
+      for (const id of ['d4', 'd3', 'd2', 'd1']) {
+        const m = getMove(id);
+        if (m && String(m.btn) === q.code && has(id)) return id;
+      }
+      // 앉은 상태 일반 버튼 폴백
       if (q.code === '3' && has('d3')) return 'd3';
       if (q.code === '4' && has('d4')) return 'd4';
-      if ((q.code === '1' || q.code === '2') && has('d2')) return 'd2';
+      if (q.code === '1' && has('d1')) return 'd1';
+      if (q.code === '2' && has('d2')) return 'd2';
       return null;
     }
-    if (q.rise && q.code === '4' && has('ws4')) return 'ws4';
-    // 방향+버튼 정확 매칭
-    for (const id of this.char.moves) {
-      const m = getMove(id);
-      if (!m || m.btn === 0 || String(m.btn) !== q.code) continue;
-      if (m.down || m.air || m.rageMove || m.special) continue;
-      if (m.dash && !q.dashF) continue;
-      if (m.rise && !q.rise) continue;
-      if (m.dir && m.dir !== q.dir) continue;
-      if (!m.dir && q.dir !== 'n' && q.dir !== 'f' && q.dir !== 'b') continue;
-      return id;
+    // 일어나며 기술 (ws+?)
+    if (q.rise) {
+      for (const id of this.char.moves) {
+        const m = getMove(id);
+        if (m && m.rise && String(m.btn) === q.code) return id;
+      }
+    }
+    // 방향+버튼 정확 매칭 (방향기 우선 → 무방향기)
+    for (let pass = 0; pass < 2; pass++) {
+      for (const id of this.char.moves) {
+        const m = getMove(id);
+        if (!m || m.btn === 0 || String(m.btn) !== q.code) continue;
+        if (m.down || m.air || m.rageMove || m.special) continue;
+        if (m.dash && !q.dashF) continue;
+        if (m.rise && !q.rise) continue;
+        if (pass === 0) {
+          if (!m.dir || m.dir !== q.dir) continue;
+        } else {
+          if (m.dir) continue;
+          if (q.dir !== 'n' && q.dir !== 'f' && q.dir !== 'b') continue;
+        }
+        return id;
+      }
     }
     // 단타 폴백
     const fb = { 1: 'm1', 2: 'm2', 3: 's3', 4: 's4', 12: 'screw12', 13: 't13', 24: 't24' };

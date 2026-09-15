@@ -52,7 +52,13 @@
   #resultTitle { font-size: 52px; font-weight: 900; font-style: italic; text-shadow: 3px 3px 0 #000, -1px -1px 0 #000; }
   #resultSub { margin-top: 6px; font-size: 13px; color: #fff; text-shadow: 2px 2px 0 #000; }
   #toast { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; z-index: 9; }
-  .toast { background: rgba(10,10,25,.92); border: 1px solid rgba(255,255,255,.25); color: #fff; padding: 8px 18px; border-radius: 10px; font-size: 14px; font-weight: 800; animation: pop .25s ease-out; white-space: nowrap; }
+  #moveBtn { position: absolute; top: 64px; right: 10px; z-index: 9; width: 40px; height: 40px; border-radius: 10px; background: rgba(10,10,25,.8); border: 1px solid rgba(255,255,255,.3); color: #fff; font-size: 18px; display: none; padding: 0; }
+  body.fighting #moveBtn { display: block; }
+  #movePanel { position: absolute; top: 56px; right: 10px; bottom: 64px; width: min(250px, 62%); z-index: 11; display: none; background: rgba(8,8,18,.96); border: 2px solid #ffd75e; border-radius: 10px; padding: 10px 12px; overflow-y: auto; color: #fff; -webkit-overflow-scrolling: touch; }
+  .mvHead { font-size: 14px; font-weight: 900; font-style: italic; color: #ffd75e; margin-bottom: 6px; }
+  .mv { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.08); font-family: monospace; }
+  .mv span:first-child { color: #ffd75e; font-weight: 800; white-space: nowrap; }
+  .mvTip { font-size: 10px; opacity: .6; margin-top: 6px; }  .toast { background: rgba(10,10,25,.92); border: 1px solid rgba(255,255,255,.25); color: #fff; padding: 8px 18px; border-radius: 10px; font-size: 14px; font-weight: 800; animation: pop .25s ease-out; white-space: nowrap; }
   @keyframes pop { from { transform: scale(.85); opacity: 0; } }
   #touchUI { position: absolute; inset: auto 0 0 0; display: none; justify-content: flex-end; padding: 0 10px 10px; pointer-events: none; z-index: 7; }
   body.touch.fighting #touchUI, body.touch.result #touchUI { display: flex; }
@@ -98,6 +104,8 @@
       <div id="connPill"><span>📶 연결 불안정…</span></div>
     </div>
     <div id="toast"></div>
+    <button id="moveBtn" title="커맨드표 (H)">📋</button>
+    <div id="movePanel"><div class="mvHead" id="moveHead"></div><div id="moveList"></div><div class="mvTip">H 또는 📋로 닫기 · 상/중/하 = 가드 방향</div></div>
     <div id="roomPill">방 코드 <b id="roomCode">------</b> 📋</div>
     <div id="resultBar"><div id="resultTitle">YOU WIN</div><div id="resultSub"></div></div>
     <div id="menu">
@@ -116,6 +124,7 @@
         <div class="help">
           🕹️ <b>A/D</b> 이동 · <b>W</b> 점프 · <b>S</b> 앉기 · <b>뒤 방향키 홀드</b> 가드(철권식)<br/>
           👊 <b>J=1 LP</b> · <b>K=2 RP</b> · <b>U=3 LK</b> · <b>I=4 RK</b> · <b>R</b> 레이지아츠<br/>
+          ↔️ 방향+버튼으로 다른 기술: <b>f+4 앞차기</b> · <b>b+2 백주먹</b> · <b>uf+4 호프킥</b> · <b>d+4 하단</b> · <b>ws+4 일어나며 발차기</b><br/>
           🌀 <b>1,1,2</b> 스트링 · <b>df+2</b> 띄우기 · <b>f,n,d,df+2</b> 풍신권(KAZUMA/HEIJI)<br/>
           🤼 <b>J+U / K+I</b> 잡기 · <b>J+K</b> 스크류(공중 콤보 연장) · <b>→→</b> 대시<br/>
           📱 <b>조이스틱</b> 이동·점프·앉기(↑↓ 포함) · <b>펀치/킥</b> 버튼 공격 · <b>필살</b> 레이지아츠

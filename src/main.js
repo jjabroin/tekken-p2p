@@ -1,5 +1,5 @@
 import { CFG } from './game/config.js';
-import { CHARS } from './game/characters.js';
+import { CHARS, getMove } from './game/characters.js';
 import { Game } from './game/engine.js';
 import { createNet, makeCode } from './net/p2p.js';
 import { sfx } from './game/audio.js';
@@ -148,6 +148,7 @@ function handleKey(code) {
     if (code === 'KeyU') game.localAttack(3);
     if (code === 'KeyI') game.localAttack(4);
     if (code === 'KeyR') game.rageArt();
+    if (code === 'KeyH') toggleMoves();
     return;
   }
   if (screen === 'result') {
@@ -174,6 +175,24 @@ function bindBtn(id, fn) {
   el.addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 }
 
+// ---------- 커맨드표 ----------
+let moveOpen = false;
+function toggleMoves(force) {
+  moveOpen = force !== undefined ? force : !moveOpen;
+  const p = $('movePanel');
+  if (moveOpen && game) {
+    const f = game.local;
+    $('moveHead').textContent = `${f.char.name} · ${f.char.style}`;
+    $('moveList').innerHTML = f.char.moves.map((id) => {
+      const m = getMove(id);
+      if (!m || m.btn === 0) return '';
+      const h = { h: '상', m: '중', l: '하', ub: '특수' }[m.h] || '';
+      return `<div class="mv"><span>${m.n}</span><span>${h} · ${Math.round(m.dmg * f.char.power)}</span></div>`;
+    }).join('');
+  }
+  p.style.display = moveOpen ? 'block' : 'none';
+}
+
 // ---------- 화면 전환 ----------
 function showOnly(id) {
   for (const m of ['menu', 'hud', 'roomPill', 'resultBar']) $(m).style.display = 'none';
@@ -193,6 +212,7 @@ function startDemo() {
 
 function toMenu() {
   if (net) { try { net.leave(); } catch {} net = null; }
+  toggleMoves(false);
   screen = 'menu';
   $('menu').style.display = 'flex';
   $('hud').style.display = 'none';
@@ -338,6 +358,7 @@ function startFight() {
   $('sub2').textContent = p2.name;
   updatePips();
   screen = 'fight';
+  toggleMoves(false);
   loop();
 }
 
@@ -379,6 +400,7 @@ function doRematch() {
 
 function toSelect(fromResult) {
   if (mode === 'p2p' && net && fromResult) net.sendSys({ t: 'toSelect' });
+  toggleMoves(false);
   $('resultBar').style.display = 'none';
   newSelect();
   // 닉 유지
@@ -401,6 +423,7 @@ $('btnJoin').onclick = () => {
 $('roomPill').onclick = () => {
   if (roomCode) navigator.clipboard?.writeText(roomCode).then(() => toast('방 코드 복사됨!'));
 };
+$('moveBtn').onclick = () => toggleMoves();
 
 // ---------- 가상 조이스틱 (터치 전용, 대전 중에만 동작) ----------
 const joy = { id: null, cx: 0, cy: 0 };
@@ -629,7 +652,8 @@ function frame(now) {
     return;
   }
 
-  // fight
+  // fight (솔로에서 커맨드표 열면 일시정지)
+  if (moveOpen && mode === 'solo' && game) { game.render(); return; }
   acc += dt;
   const raw = readRaw();
   while (acc >= 1 / 60) {

@@ -253,7 +253,7 @@ export class Game {
     const type = m.kd ? 'kd' : 'hit';
     const stun = 14 + Math.round(m.dmg * 0.4);
     def.applyHit({ dmg, push: m.push || 2.5, type, fromX: att.x, stun });
-    this.hitstop = m.heavy ? 10 : 6; this.shake = m.heavy ? 7 : 4;
+    this.hitstop = m.heavy ? 9 : 5; this.shake = m.heavy ? 7 : 4;
     if (m.heavy) sfx.heavy();
     else if (m.btn === 3 || m.btn === 4) sfx.kick();
     else sfx.punch();
