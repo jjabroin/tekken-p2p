@@ -139,6 +139,7 @@ export class Game {
     }
 
     if (this.phase === 'fight') {
+      if (!this.train) this.time -= 1 / 60;
       const locked = this.phase !== 'fight' || !!this.announce;
       const empty = {};
       const rawFor = (side) => (locked ? empty : (side === this.localSide ? localRaw : empty));
@@ -162,7 +163,7 @@ export class Game {
           sfx.ko();
           this.say(dead1 && dead2 ? 'DOUBLE K.O.!' : 'K.O.!', '', 60, 52);
         }
-      } else if (dead1 || dead2) this.endRound(dead1, dead2);
+      } else if (dead1 || dead2 || this.time <= 0) this.endRound(dead1, dead2);
     } else if (this.phase === 'ko' || this.phase === 'roundEnd') {
       this.p1.update({}, this.p2);
       this.p2.update({}, this.p1);
@@ -351,7 +352,11 @@ export class Game {
       return;
     }
     sfx.ko();
-    this.say(dead1 && dead2 ? 'DOUBLE K.O.!' : 'K.O.!', '', 70, 64);
+    if (this.time <= 0 && !dead1 && !dead2) {
+      this.say('TIME UP', '', 70, 52);
+    } else {
+      this.say(dead1 && dead2 ? 'DOUBLE K.O.!' : 'K.O.!', '', 70, 64);
+    }
     this.pendingWinner = winner;
     this.pendingPerfect = winner ? this[winner].hp >= this[winner].maxHp : false;
   }

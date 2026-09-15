@@ -5,12 +5,12 @@
 
 export const MOVES = {
   // --- 기본 손 (빠른 발동) ---
-  m1:   { n: '1', btn: 1, st: 5, ac: 3, rc: 8, dmg: 7, range: 46, h: 'h', next: { 1: 'm11', 2: 'm12' }, anim: ['jab1', 'jab2'] },
-  m11:  { n: '1,1', btn: 1, st: 6, ac: 3, rc: 9, dmg: 8, range: 46, h: 'h', next: { 2: 'm112' }, anim: ['jab2', 'jab4'] },
+  m1:   { n: '1', btn: 1, st: 5, ac: 3, rc: 5, dmg: 7, range: 46, h: 'h', next: { 1: 'm11', 2: 'm12' }, anim: ['jab1', 'jab2'] },
+  m11:  { n: '1,1', btn: 1, st: 6, ac: 3, rc: 7, dmg: 8, range: 46, h: 'h', next: { 2: 'm112' }, anim: ['jab2', 'jab4'] },
   m112: { n: '1,1,2', btn: 2, st: 10, ac: 4, rc: 17, dmg: 14, range: 50, h: 'm', kd: true, push: 5, anim: ['cross1', 'cross2', 'cross3'] },
-  m2:   { n: '2', btn: 2, st: 7, ac: 3, rc: 10, dmg: 9, range: 48, h: 'h', next: { 1: 'm21' }, anim: ['cross1', 'cross2'] },
-  m21:  { n: '2,1', btn: 1, st: 8, ac: 3, rc: 11, dmg: 10, range: 48, h: 'm', anim: ['jab2', 'jab3'] },
-  m12:  { n: '1,2', btn: 2, st: 8, ac: 3, rc: 11, dmg: 11, range: 48, h: 'h', anim: ['cross2', 'cross3'] },
+  m2:   { n: '2', btn: 2, st: 7, ac: 3, rc: 7, dmg: 9, range: 48, h: 'h', next: { 1: 'm21' }, anim: ['cross1', 'cross2'] },
+  m21:  { n: '2,1', btn: 1, st: 8, ac: 3, rc: 8, dmg: 10, range: 48, h: 'm', anim: ['jab2', 'jab3'] },
+  m12:  { n: '1,2', btn: 2, st: 8, ac: 3, rc: 8, dmg: 11, range: 48, h: 'h', anim: ['cross2', 'cross3'] },
   // --- 앞 방향기 ---
   f1:   { n: 'f+1', btn: 1, dir: 'f', st: 8, ac: 3, rc: 11, dmg: 10, range: 50, h: 'm', push: 3, anim: ['jab2', 'cross2'] },
   f3:   { n: 'f+3', btn: 3, dir: 'f', st: 11, ac: 4, rc: 14, dmg: 12, range: 58, h: 'm', push: 3, anim: ['lk0', 'lk1', 'lk2'] },

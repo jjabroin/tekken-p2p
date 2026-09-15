@@ -52,7 +52,6 @@ function newSelect() {
     cursor: { p1: 0, p2: 1 },
     locked: { p1: false, p2: false },
     charId: { p1: 0, p2: 1 },
-    t: 20 * 60,
     helloT: 0,
   };
 }
@@ -428,7 +427,7 @@ function checkSelectDone() {
     }
     return;
   }
-  if (sel.locked.p1 && sel.locked.p2 && sel.t < 20 * 60 - 30) startVs();
+  if (sel.locked.p1 && sel.locked.p2) startVs();
 }
 
 function startVs() {
@@ -627,11 +626,15 @@ function drawSelect() {
   ctx.font = 'italic 900 26px Georgia, serif';
   ctx.fillStyle = '#ffd75e';
   ctx.fillText((mode === 'solo' || mode === 'train') ? 'SELECT YOUR FIGHTER' : `SELECT (ROOM ${roomCode || ''})`, CFG.W / 2, 30);
-  // 타이머
-  const t = Math.ceil(sel.t / 60);
-  ctx.font = 'bold 14px monospace';
-  ctx.fillStyle = t <= 5 ? '#ff5a5a' : '#fff';
-  ctx.fillText(`${t}`, CFG.W / 2, 48);
+  // 상대 입장 상태 (타이머 없음, 무제한 대기)
+  ctx.font = 'bold 13px monospace';
+  if (mode === 'p2p') {
+    ctx.fillStyle = seenPeer ? '#7dff9a' : '#ffd75e';
+    ctx.fillText(seenPeer ? '상대와 함께 고르세요' : '상대 입장 대기중…', CFG.W / 2, 48);
+  } else {
+    ctx.fillStyle = '#fff';
+    ctx.fillText('마음에 드는 파이터를 고르세요', CFG.W / 2, 48);
+  }
 
   // 초상화 그리드 4x2 (80x72)
   const cw = 104, pw = 80, ph = 72, x0 = (CFG.W - cw * 4) / 2, y0 = 56, rowH = 82;
@@ -724,17 +727,9 @@ function frame(now) {
   if (screen === 'title') { drawTitle(); return; }
   if (screen === 'menu') { if (game) game.step({}, null); drawMenuBg(); return; }
   if (screen === 'select') {
-    sel.t -= 1;
     sel.helloT -= 1;
     if (sel.helloT <= 0) { sel.helloT = 30; broadcastHello(); }
-    checkSelectDone(); // 양쪽 확정 검사는 매 프레임 (이벤트 누락/타이밍 가드 대비)
-    if (sel.t <= 0 && !sel.locked[mySide]) {
-      sel.cursor[mySide] = Math.floor(Math.random() * 8);
-      sel.locked[mySide] = true;
-      sel.charId[mySide] = sel.cursor[mySide];
-      broadcastHello();
-      checkSelectDone();
-    }
+    checkSelectDone(); // 양쪽 확정 검사는 매 프레임
     drawSelect();
     return;
   }
@@ -778,7 +773,7 @@ function frame(now) {
     $('timer').textContent = '∞';
     $('round').textContent = `연습중 · 더미:${DUMMY_LABEL[game.trainDummyMode] || ''}`;
   } else {
-    $('timer').textContent = '∞';
+    $('timer').textContent = Math.max(0, Math.ceil(game.time));
     $('round').textContent = `R${game.round} · ${CFG.WIN_ROUNDS}선승`;
   }
   $('rage1').style.visibility = game.p1.rage && game.p1.hp > 0 ? 'visible' : 'hidden';
