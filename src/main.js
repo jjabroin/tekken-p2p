@@ -185,6 +185,18 @@ function bindBtn(id, fn) {
   el.addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 }
 
+// 표기법 방향 → 화살표 (df+2 → ↘+2). 앞 토큰(기술명 앞부분)만 변환.
+function fmtNotation(n) {
+  const parts = String(n).split(' ');
+  parts[0] = parts[0]
+    .replace(/df/g, '↘').replace(/db/g, '↙')
+    .replace(/uf/g, '↗').replace(/ub/g, '↖')
+    .replace(/f/g, '→').replace(/b/g, '←')
+    .replace(/d/g, '↓').replace(/u/g, '↑')
+    .replace(/n/g, '·');
+  return parts.join(' ');
+}
+
 // ---------- 커맨드표 ----------
 let moveOpen = false;
 function toggleMoves(force) {
@@ -197,7 +209,7 @@ function toggleMoves(force) {
       const m = getMove(id);
       if (!m || m.btn === 0) return '';
       const h = { h: '상', m: '중', l: '하', ub: '특수' }[m.h] || '';
-      return `<div class="mv"><span>${m.n}</span><span>${h} · ${Math.round(m.dmg * f.char.power)}</span></div>`;
+      return `<div class="mv"><span>${fmtNotation(m.n)}</span><span>${h} · ${Math.round(m.dmg * f.char.power)}</span></div>`;
     }).join('');
   }
   p.style.display = moveOpen ? 'block' : 'none';
@@ -243,7 +255,7 @@ function trackTrainFrame() {
     const m = getMove(atk.id);
     if (m) {
       const h = { h: '상', m: '중', l: '하', ub: '특수' }[m.h] || '';
-      lastMoveInfo = { txt: `${m.n} · 발동${m.st}F · ${h} · ${Math.round(m.dmg * f.char.power)}뎀`, t: performance.now() };
+      lastMoveInfo = { txt: `${fmtNotation(m.n)} · 발동${m.st}F · ${h} · ${Math.round(m.dmg * f.char.power)}뎀`, t: performance.now() };
     }
   }
 }
@@ -701,7 +713,7 @@ function drawSelect() {
   ctx.fillText(`${c.style} · ${c.desc}`, 24, 258);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#ccc';
-  ctx.fillText('주요기: ' + c.key.join(' / '), CFG.W - 24, 244);
+  ctx.fillText('주요기: ' + c.key.map(fmtNotation).join(' / '), CFG.W - 24, 244);
   ctx.fillStyle = '#888';
   ctx.fillText(isTouch ? '◀ ▶ 선택 · 펀치 버튼 결정' : ((mode === 'solo' || mode === 'train') ? 'A/D 선택 · J 결정' : 'A/D 선택 · J 결정 · K 해제'), CFG.W - 24, 258);
   ctx.textAlign = 'center';
