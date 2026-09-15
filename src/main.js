@@ -213,6 +213,7 @@ function startP2P(code, host) {
   isHost = host;
   mySide = host ? 'p1' : 'p2';
   newSelect();
+  try {
   net = createNet({
     code,
     onPeerJoin: () => { toast('👋 상대가 입장했습니다!'); broadcastHello(); },
@@ -233,6 +234,12 @@ function startP2P(code, host) {
       if (s.t === 'toSelect') toSelect(false);
     },
   });
+  } catch (err) {
+    console.error(err);
+    toast('방 연결 실패 😢 다시 시도해주세요');
+    toMenu();
+    return;
+  }
   screen = 'select';
   showOnly(null);
   $('roomPill').style.display = 'block';
@@ -549,6 +556,7 @@ function frame(now) {
     sel.t -= 1;
     sel.helloT -= 1;
     if (sel.helloT <= 0) { sel.helloT = 30; broadcastHello(); }
+    checkSelectDone(); // 양쪽 확정 검사는 매 프레임 (이벤트 누락/타이밍 가드 대비)
     if (sel.t <= 0 && !sel.locked[mySide]) {
       sel.cursor[mySide] = Math.floor(Math.random() * 8);
       sel.locked[mySide] = true;
@@ -618,3 +626,5 @@ function drawMenuBg() {
 // E2E 확인용 현재 화면 노출
 Object.defineProperty(window, '__screen', { get: () => screen });
 Object.defineProperty(window, '__game', { get: () => game });
+Object.defineProperty(window, '__sel', { get: () => sel });
+Object.defineProperty(window, '__net', { get: () => net });
