@@ -9,6 +9,7 @@
     "preview": "vite preview --port 4174"
   },
   "dependencies": {
+    "@trystero-p2p/mqtt": "^0.25.4",
     "@trystero-p2p/torrent": "^0.25.4"
   },
   "devDependencies": {

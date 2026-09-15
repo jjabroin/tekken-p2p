@@ -212,34 +212,9 @@ function startP2P(code, host) {
   mode = 'p2p';
   isHost = host;
   mySide = host ? 'p1' : 'p2';
+  roomCode = code;
   newSelect();
-  try {
-  net = createNet({
-    code,
-    onPeerJoin: () => { toast('👋 상대가 입장했습니다!'); broadcastHello(); },
-    onPeerLeave: () => toast('상대가 나갔습니다'),
-    onHello: (h) => {
-      const foe = mySide === 'p1' ? 'p2' : 'p1';
-      if (typeof h.cursor === 'number') sel.cursor[foe] = h.cursor;
-      if (typeof h.charId === 'number') sel.charId[foe] = h.charId;
-      if (typeof h.locked === 'boolean') sel.locked[foe] = h.locked;
-      if (h.nick) sel['nick_' + foe] = h.nick;
-      checkSelectDone();
-    },
-    onState: (snap) => game && screen === 'fight' && game.applyRemoteSnapshot(snap),
-    onAction: (a) => game && screen === 'fight' && game.applyRemoteAction(a),
-    onHit: (h) => game && screen === 'fight' && game.applyRemoteHit(h),
-    onSys: (s) => {
-      if (s.t === 'rematch') { remoteRematch = true; checkRematch(); }
-      if (s.t === 'toSelect') toSelect(false);
-    },
-  });
-  } catch (err) {
-    console.error(err);
-    toast('방 연결 실패 😢 다시 시도해주세요');
-    toMenu();
-    return;
-  }
+  if (!connectNet()) return;
   screen = 'select';
   showOnly(null);
   $('roomPill').style.display = 'block';
@@ -248,6 +223,81 @@ function startP2P(code, host) {
     navigator.clipboard?.writeText(code).then(() => toast('방 코드 복사됨!'));
   };
   toast(host ? `방 생성! 코드 ${code}를 공유하세요` : `방 ${code}에 연결 중…`);
+}
+
+let lastRx = 0; // 마지막 수신 시각
+let seenPeer = false; // 이번 접속에서 피어를 본 적 있는지
+let connWarned = false;
+function markRx() { lastRx = performance.now(); }
+
+function connectNet() {
+  if (net) { try { net.leave(); } catch { /* noop */ } net = null; }
+  lastRx = performance.now();
+  seenPeer = false;
+  connWarned = false;
+  try {
+  net = createNet({
+    code: roomCode,
+    onPeerJoin: () => { markRx(); seenPeer = true; toast('👋 상대가 입장했습니다!'); broadcastHello(); },
+    onPeerLeave: () => toast('상대가 나갔습니다'),
+    onHello: (h) => {
+      try {
+        markRx(); seenPeer = true;
+        if (!sel || !h) return;
+        const foe = mySide === 'p1' ? 'p2' : 'p1';
+        if (typeof h.cursor === 'number') sel.cursor[foe] = h.cursor;
+        if (typeof h.charId === 'number') sel.charId[foe] = h.charId;
+        if (typeof h.locked === 'boolean') sel.locked[foe] = h.locked;
+        if (h.nick) sel['nick_' + foe] = h.nick;
+        checkSelectDone();
+      } catch (e) { console.error(e); }
+    },
+    onState: (snap) => { try { markRx(); if (game && screen === 'fight') game.applyRemoteSnapshot(snap); } catch (e) { console.error(e); } },
+    onAction: (a) => { try { markRx(); if (game && screen === 'fight') game.applyRemoteAction(a); } catch (e) { console.error(e); } },
+    onHit: (h) => { try { markRx(); if (game && screen === 'fight') game.applyRemoteHit(h); } catch (e) { console.error(e); } },
+    onSys: (s) => {
+      try {
+        markRx();
+        if (!s) return;
+        if (s.t === 'rematch') { remoteRematch = true; checkRematch(); }
+        if (s.t === 'toSelect') toSelect(false);
+      } catch (e) { console.error(e); }
+    },
+  });
+  } catch (err) {
+    console.error(err);
+    toast('방 연결 실패 😢 다시 시도해주세요');
+    toMenu();
+    return false;
+  }
+  return true;
+}
+
+// 끊김 감지: 피어를 본 뒤 침묵이 계속되면 자동 재접속
+function watchConn(now) {
+  if (mode !== 'p2p' || !net || !seenPeer) return;
+  if (screen !== 'select' && screen !== 'fight' && screen !== 'vs') return;
+  const silent = now - lastRx;
+  const pill = $('connPill');
+  if (silent > 15000) {
+    doRejoin();
+  } else if (silent > 7000) {
+    if (pill) { pill.style.display = 'block'; pill.textContent = '📶 연결 불안정…'; }
+    if (!connWarned) { connWarned = true; toast('📶 연결이 불안정합니다…'); }
+  } else if (pill) {
+    pill.style.display = 'none';
+  }
+}
+
+function doRejoin() {
+  toast('🔄 연결이 끊겨 재접속합니다…');
+  $('resultBar').style.display = 'none';
+  $('hud').style.display = 'none';
+  const pill = $('connPill');
+  if (pill) pill.style.display = 'none';
+  newSelect();
+  connectNet();
+  screen = 'select';
 }
 
 function broadcastHello() {
@@ -544,6 +594,7 @@ function frame(now) {
   // 터치 UI 화면별 토글
   document.body.classList.toggle('fighting', screen === 'fight');
   document.body.classList.toggle('result', screen === 'result');
+  watchConn(now);
   const tsel = $('touchSel');
   if (tsel) tsel.style.display = (isTouch && screen === 'select') ? 'flex' : 'none';
   let dt = (now - last) / 1000;

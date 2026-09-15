@@ -1,4 +1,4 @@
-import { joinRoom } from '@trystero-p2p/torrent';
+import { joinRoom } from '@trystero-p2p/mqtt';
 
 // 방 코드 6자리 (헷갈리는 문자 제외)
 export function makeCode() {
@@ -8,9 +8,9 @@ export function makeCode() {
   return s;
 }
 
-const APP_ID = 'tekken-p2p-v2';
+const APP_ID = 'tekken-p2p-v3';
 
-// Trystero v0.25 API:
+// Trystero v0.25 API (MQTT 트랜스포트 — 공개 브로커 경유 시그널링, 데이터는 P2P WebRTC):
 // - makeAction()은 { send, onMessage } 객체 반환 (구 튜플 아님)
 // - onPeerJoin/onPeerLeave는 setter 프로퍼티 (메서드 아님)
 // - send()는 promise 반환 → catch 필수
