@@ -220,9 +220,11 @@ function cycleDummy() {
 
 function recInput(btn, held = []) {
   if (mode !== 'train' || screen !== 'fight' || !game) return;
-  const dir = game.local ? game.local.input.dir : 'n';
+  const f = game.local;
+  const dir = f ? f.input.dir : 'n';
+  const face = f ? f.facing : 1;
   const combo = [...new Set([btn, ...held])].sort().join('');
-  trainInputs.push({ dir, btn: combo });
+  trainInputs.push({ dir, btn: combo, face });
   if (trainInputs.length > 40) trainInputs.shift();
 }
 
@@ -232,7 +234,7 @@ function trackTrainFrame() {
   if (!f) return;
   if (f.input.dir !== lastDirShown) {
     lastDirShown = f.input.dir;
-    trainInputs.push({ dir: lastDirShown, btn: null });
+    trainInputs.push({ dir: lastDirShown, btn: null, face: f.facing });
     if (trainInputs.length > 40) trainInputs.shift();
   }
   const atk = f.attack;
@@ -257,12 +259,20 @@ function drawTrain() {
     ctx.fillStyle = '#ffd75e';
     ctx.fillText(lastMoveInfo.txt, 14, 57);
   }
-  // 입력 히스토리 (좌하단 최근 8개)
+  // 입력 히스토리 (좌하단 최근 8개, 터치는 화살표로)
+  const toArrow = (dir, face) => {
+    const f = face === 1 ? { f: '→', b: '←', df: '↘', db: '↙', uf: '↗', ub: '↖' } : { f: '←', b: '→', df: '↙', db: '↘', uf: '↖', ub: '↗' };
+    if (dir === 'n') return '·';
+    if (dir === 'u') return '↑';
+    if (dir === 'd') return '↓';
+    return f[dir] || dir;
+  };
   const items = trainInputs.slice(-8);
   ctx.textAlign = 'left';
   items.forEach((inp, i) => {
     const y = CFG.H - 14 - (items.length - 1 - i) * 17;
-    const txt = inp.btn ? `${inp.dir} ${inp.btn}` : inp.dir;
+    const d = isTouch ? toArrow(inp.dir, inp.face || 1) : inp.dir;
+    const txt = inp.btn ? `${d} ${inp.btn}` : d;
     ctx.font = 'bold 11px monospace';
     ctx.fillStyle = inp.btn ? 'rgba(230,59,95,.85)' : 'rgba(255,255,255,.55)';
     ctx.fillText(txt, 12, y);
