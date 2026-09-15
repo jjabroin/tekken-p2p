@@ -6,7 +6,7 @@
 export const MOVES = {
   // --- 기본 손 (빠른 발동) ---
   m1:   { n: '1', btn: 1, st: 5, ac: 3, rc: 8, dmg: 7, range: 46, h: 'h', next: { 1: 'm11', 2: 'm12' }, anim: ['jab0', 'jab1', 'jab2', 'jab1'] },
-  m11:  { n: '1,1', btn: 1, st: 6, ac: 3, rc: 9, dmg: 8, range: 46, h: 'h', next: { 2: 'm112' }, anim: ['jab1', 'jab2', 'jab3', 'jab1'] },
+  m11:  { n: '1,1', btn: 1, st: 6, ac: 3, rc: 9, dmg: 8, range: 46, h: 'h', next: { 2: 'm112' }, anim: ['jab2', 'jab4', 'jab1'] },
   m112: { n: '1,1,2', btn: 2, st: 10, ac: 4, rc: 17, dmg: 14, range: 50, h: 'm', kd: true, push: 5, anim: ['cross1', 'cross2', 'cross3'] },
   m2:   { n: '2', btn: 2, st: 7, ac: 3, rc: 10, dmg: 9, range: 48, h: 'h', next: { 1: 'm21' }, anim: ['cross0', 'cross1', 'cross2', 'cross1'] },
   m21:  { n: '2,1', btn: 1, st: 8, ac: 3, rc: 11, dmg: 10, range: 48, h: 'm', anim: ['jab1', 'jab2', 'jab3'] },
@@ -61,7 +61,7 @@ export const MOVES = {
   get4: { n: '기상 4', btn: 4, down: true, st: 12, ac: 6, rc: 19, dmg: 12, range: 60, h: 'm', kd: true, anim: ['rk1', 'rk2', 'rk3'] },
   // --- 점프 공격 ---
   air1: { n: '공중 1', btn: 1, air: true, st: 6, ac: 10, rc: 10, dmg: 8, range: 48, h: 'm', anim: ['air0', 'air1'] },
-  air4: { n: '공중 4', btn: 4, air: true, st: 8, ac: 10, rc: 12, dmg: 11, range: 54, h: 'm', anim: ['air0', 'air1'] },
+  air4: { n: '공중 4', btn: 4, air: true, st: 8, ac: 10, rc: 12, dmg: 11, range: 54, h: 'm', anim: ['airk0', 'airk1', 'airk0'] },
 };
 
 const CORE = ['m1', 'm11', 'm112', 'm2', 'm21', 'm12', 'f1', 'f3', 'f4', 'b1', 'b2', 'b3', 'b4',
