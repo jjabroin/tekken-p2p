@@ -142,10 +142,16 @@ function handleKey(code) {
     return;
   }
   if (screen === 'fight' && game) {
-    if (code === 'KeyJ') { game.localAttack(1); recInput(1); }
-    if (code === 'KeyK') { game.localAttack(2); recInput(2); }
-    if (code === 'KeyU') { game.localAttack(3); recInput(3); }
-    if (code === 'KeyI') { game.localAttack(4); recInput(4); }
+    // 현재 눌려있는 버튼들 = 동시누르기 (철권 표기 그대로)
+    const heldKeys = [];
+    if (keys.KeyJ) heldKeys.push(1);
+    if (keys.KeyK) heldKeys.push(2);
+    if (keys.KeyU) heldKeys.push(3);
+    if (keys.KeyI) heldKeys.push(4);
+    if (code === 'KeyJ') { game.localAttack(1, heldKeys); recInput(1, heldKeys); }
+    if (code === 'KeyK') { game.localAttack(2, heldKeys); recInput(2, heldKeys); }
+    if (code === 'KeyU') { game.localAttack(3, heldKeys); recInput(3, heldKeys); }
+    if (code === 'KeyI') { game.localAttack(4, heldKeys); recInput(4, heldKeys); }
     if (code === 'KeyR') { game.rageArt(); recInput('R'); }
     if (code === 'KeyH') toggleMoves();
     if (mode === 'train') {
@@ -212,10 +218,11 @@ function cycleDummy() {
   toast(`더미: ${DUMMY_LABEL[game.trainDummyMode]}`);
 }
 
-function recInput(btn) {
+function recInput(btn, held = []) {
   if (mode !== 'train' || screen !== 'fight' || !game) return;
   const dir = game.local ? game.local.input.dir : 'n';
-  trainInputs.push({ dir, btn: String(btn) });
+  const combo = [...new Set([btn, ...held])].sort().join('');
+  trainInputs.push({ dir, btn: combo });
   if (trainInputs.length > 40) trainInputs.shift();
 }
 
@@ -580,9 +587,20 @@ bindBtn('tSelOK', () => handleKey(screen === 'select' ? 'KeyJ' : ''));
 
 function btnPress(b) {
   if (screen === 'select') { handleKey('KeyJ'); return; }
-  if (screen === 'fight' && game) { game.localAttack(b); recInput(b); }
+  if (screen === 'fight' && game) { game.localAttack(b, [...touchHeld]); recInput(b, [...touchHeld]); }
   if (screen === 'title') toMenu();
   if (screen === 'result' && b === 1) wantRematch();
+}
+
+// 터치 버튼 눌림 상태 (동시누르기 판정용 — 표기법 그대로)
+const touchHeld = new Set();
+for (const [id, b] of [['t1', 1], ['t2', 2], ['t3', 3], ['t4', 4]]) {
+  const el = $(id);
+  if (!el) continue;
+  el.addEventListener('pointerdown', () => touchHeld.add(b));
+  el.addEventListener('pointerup', () => touchHeld.delete(b));
+  el.addEventListener('pointercancel', () => touchHeld.delete(b));
+  el.addEventListener('pointerleave', () => touchHeld.delete(b));
 }
 
 // ---------- 셀렉트/타이틀/VS 렌더 ----------

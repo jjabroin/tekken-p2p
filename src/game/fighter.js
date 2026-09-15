@@ -157,6 +157,7 @@ export class Fighter {
     const dir = this.x >= fromX ? 1 : -1;
     this.attack = null;
     this.buffer = null;
+    this.bufferT = 0;
     if (type === 'block') {
       this.hp = Math.max(0, this.hp - dmg);
       this.x += dir * push;
@@ -280,7 +281,7 @@ export class Fighter {
       }
       // 버퍼 저장 (연계 타이밍용, 14f)
       if (buffered.length) { this.buffer = buffered[buffered.length - 1]; this.bufferT = 14; }
-      if (this.bufferT > 0) {
+      if (this.bufferT > 0 && this.buffer) {
         this.bufferT -= 1;
         const nx = m.next?.[this.buffer.code];
         if (nx && this.attack.t >= m.st && this.char.moves.includes(nx)) {
@@ -294,6 +295,8 @@ export class Fighter {
       if (m.rageMove) this.x += this.facing * 3.2;
       if (this.attack.t >= total) {
         this.attack = null;
+        this.buffer = null;
+        this.bufferT = 0;
         this.state = this.onGround ? 'idle' : 'jump';
       }
       this.physics();

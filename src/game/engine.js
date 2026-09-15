@@ -77,16 +77,10 @@ export class Game {
     this.announce = { text, sub, t: 0, dur, size };
   }
 
-  localAttack(code) {
-    const f = this.local;
-    if (this.phase !== 'fight') return null;
-    f.input.press(code);
-    return true;
-  }
-
-  localAttack(code) {
+  // held: 현재 물리적으로 눌려있는 버튼들 (동시누르기 판정용, 표기법 그대로)
+  localAttack(code, held = []) {
     if (this.phase !== 'fight') return;
-    this.local.input.press(code);
+    this.local.input.press(code, held);
   }
 
   rageArt() {

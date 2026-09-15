@@ -6,7 +6,6 @@ export class TekkenInput {
     this.prevDirKeys = { f: false, b: false, u: false, d: false };
     this.hist = []; // 최근 방향 (프레임당 1개, 최대 48)
     this.queue = []; // 소비 대기 버튼 [{code, dir, crouch, rise, dashF, t}]
-    this.held = {}; // btn -> 누른 시각
     this.lastTapF = -99;
     this.lastTapB = -99;
     this.dashF = 0; // 남은 대시 판정 프레임
@@ -51,23 +50,20 @@ export class TekkenInput {
     if (wasCrouch && !this.crouch) this.crouchReleasedAt = this.t;
     if (this.dashF > 0) this.dashF -= 1;
     if (this.dashB > 0) this.dashB -= 1;
-    // 오래된 큐 정리 (12f)
-    this.queue = this.queue.filter((q) => this.t - q.t < 14);
-    for (const k of Object.keys(this.held)) {
-      if (this.t - this.held[k] > 30) delete this.held[k];
-    }
+    // 오래된 큐 정리 (22f)
+    this.queue = this.queue.filter((q) => this.t - q.t < 22);
   }
 
-  // 버튼 눌림 엣지: btn = 1|2|3|4
-  press(btn) {
-    this.held[btn] = this.t;
-    // 2틱 이내 함께 눌린 버튼 합치기 (1+3 잡기, 1+2 스크류 등).
-    // 스트링(1,1,2)은 타격 간격이 더 길어서 합쳐지지 않음.
-    const combo = Object.keys(this.held)
-      .filter((k) => this.t - this.held[k] <= 2)
-      .map(Number).sort().join('');
-    // 기존 같은 틱 큐 항목 제거 후 합본으로 교체
-    this.queue = this.queue.filter((q) => q.t !== this.t);
+  // 버튼 눌림 엣지: btn = 1|2|3|4, held = 현재 눌려있는 버튼들(자신 포함 가능)
+  // 철권식: 물리적으로 함께 눌린 버튼 = 동시누르기. 손가락이 겹쳐있는 동안은 합쳐짐.
+  press(btn, held = []) {
+    // 아직 소비되지 않은 최근 입력(4틱 이내)은 코드 완성을 기다리던 것으로 보고 합침
+    const fresh = [];
+    this.queue = this.queue.filter((q) => {
+      if (this.t - q.t <= 4) { for (const ch of q.code) fresh.push(+ch); return false; }
+      return true;
+    });
+    const combo = [...new Set([btn, ...held, ...fresh])].sort((a, b) => a - b).join('');
     this.queue.push({
       code: combo, dir: this.dir, crouch: this.crouch,
       rise: !this.crouch && (this.t - this.crouchReleasedAt) <= 8,
