@@ -143,12 +143,17 @@ function handleKey(code) {
     return;
   }
   if (screen === 'fight' && game) {
-    if (code === 'KeyJ') game.localAttack(1);
-    if (code === 'KeyK') game.localAttack(2);
-    if (code === 'KeyU') game.localAttack(3);
-    if (code === 'KeyI') game.localAttack(4);
-    if (code === 'KeyR') game.rageArt();
+    if (code === 'KeyJ') { game.localAttack(1); recInput(1); }
+    if (code === 'KeyK') { game.localAttack(2); recInput(2); }
+    if (code === 'KeyU') { game.localAttack(3); recInput(3); }
+    if (code === 'KeyI') { game.localAttack(4); recInput(4); }
+    if (code === 'KeyR') { game.rageArt(); recInput('R'); }
     if (code === 'KeyH') toggleMoves();
+    if (mode === 'train') {
+      if (code === 'KeyG') cycleDummy();
+      if (code === 'KeyX' || code === 'Backspace') { game.trainReset(); toast('위치 리셋'); }
+      if (code === 'Escape') toMenu();
+    }
     return;
   }
   if (screen === 'result') {
@@ -193,6 +198,72 @@ function toggleMoves(force) {
   p.style.display = moveOpen ? 'block' : 'none';
 }
 
+// ---------- 연습 모드: 입력 표시 + 프레임 정보 ----------
+let trainInputs = []; // {dir, btn}
+let lastDirShown = 'n';
+let lastAtkSeq = 0;
+let lastMoveInfo = null; // {txt, t}
+const DUMMY_MODES = ['stand', 'guard', 'crouch'];
+const DUMMY_LABEL = { stand: '스탠드', guard: '가드', crouch: '앉기' };
+
+function cycleDummy() {
+  if (!game || mode !== 'train') return;
+  const i = (DUMMY_MODES.indexOf(game.trainDummyMode) + 1) % DUMMY_MODES.length;
+  game.trainDummyMode = DUMMY_MODES[i];
+  toast(`더미: ${DUMMY_LABEL[game.trainDummyMode]}`);
+}
+
+function recInput(btn) {
+  if (mode !== 'train' || screen !== 'fight' || !game) return;
+  const dir = game.local ? game.local.input.dir : 'n';
+  trainInputs.push({ dir, btn: String(btn) });
+  if (trainInputs.length > 40) trainInputs.shift();
+}
+
+function trackTrainFrame() {
+  if (mode !== 'train' || screen !== 'fight' || !game) return;
+  const f = game.local;
+  if (!f) return;
+  if (f.input.dir !== lastDirShown) {
+    lastDirShown = f.input.dir;
+    trainInputs.push({ dir: lastDirShown, btn: null });
+    if (trainInputs.length > 40) trainInputs.shift();
+  }
+  const atk = f.attack;
+  if (atk && atk.seq !== lastAtkSeq) {
+    lastAtkSeq = atk.seq;
+    const m = getMove(atk.id);
+    if (m) {
+      const h = { h: '상', m: '중', l: '하', ub: '특수' }[m.h] || '';
+      lastMoveInfo = { txt: `${m.n} · 발동${m.st}F · ${h} · ${Math.round(m.dmg * f.char.power)}뎀`, t: performance.now() };
+    }
+  }
+}
+
+function drawTrain() {
+  if (mode !== 'train' || !game) return;
+  // 마지막 기술 프레임 정보 (좌상단)
+  if (lastMoveInfo && performance.now() - lastMoveInfo.t < 4000) {
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    ctx.fillRect(8, 44, 196, 18);
+    ctx.fillStyle = '#ffd75e';
+    ctx.fillText(lastMoveInfo.txt, 14, 57);
+  }
+  // 입력 히스토리 (좌하단 최근 8개)
+  const items = trainInputs.slice(-8);
+  ctx.textAlign = 'left';
+  items.forEach((inp, i) => {
+    const y = CFG.H - 14 - (items.length - 1 - i) * 17;
+    const txt = inp.btn ? `${inp.dir} ${inp.btn}` : inp.dir;
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = inp.btn ? 'rgba(230,59,95,.85)' : 'rgba(255,255,255,.55)';
+    ctx.fillText(txt, 12, y);
+  });
+  ctx.textAlign = 'center';
+}
+
 // ---------- 화면 전환 ----------
 function showOnly(id) {
   for (const m of ['menu', 'hud', 'roomPill', 'resultBar']) $(m).style.display = 'none';
@@ -226,6 +297,17 @@ function startSolo() {
   newSelect();
   screen = 'select';
   showOnly(null);
+}
+
+function startTrain() {
+  mode = 'train';
+  mySide = 'p1';
+  trainInputs = [];
+  lastMoveInfo = null;
+  newSelect();
+  screen = 'select';
+  showOnly(null);
+  toast('연습 모드! 캐릭터를 고르세요');
 }
 
 function startP2P(code, host) {
@@ -327,10 +409,15 @@ function broadcastHello() {
 
 function checkSelectDone() {
   if (screen !== 'select' || !sel) return;
-  if (mode === 'solo') {
+  if (mode === 'solo' || mode === 'train') {
     if (sel.locked.p1) {
-      sel.charId.p2 = (sel.charId.p1 + 1 + Math.floor(Math.random() * 7)) % 8;
-      sel['nick_p2'] = 'CPU';
+      if (mode === 'solo') {
+        sel.charId.p2 = (sel.charId.p1 + 1 + Math.floor(Math.random() * 7)) % 8;
+        sel['nick_p2'] = 'CPU';
+      } else {
+        sel.charId.p2 = sel.charId.p1; // 미러전 (같은 캐릭터 더미)
+        sel['nick_p2'] = 'DUMMY';
+      }
       startVs();
     }
     return;
@@ -345,11 +432,12 @@ function startVs() {
 }
 
 function startFight() {
-  const p1 = { name: mode === 'solo' ? nick : (mySide === 'p1' ? nick : (sel.nick_p1 || '상대')), charId: sel.charId.p1 };
-  const p2 = { name: mode === 'solo' ? 'CPU' : (mySide === 'p2' ? nick : (sel.nick_p2 || '상대')), charId: sel.charId.p2 };
-  game = new Game(canvas, { sheets, onEvent, p1, p2 });
+  const p1 = { name: (mode === 'solo' || mode === 'train') ? nick : (mySide === 'p1' ? nick : (sel.nick_p1 || '상대')), charId: sel.charId.p1 };
+  const p2 = { name: mode === 'solo' ? 'CPU' : mode === 'train' ? 'DUMMY' : (mySide === 'p2' ? nick : (sel.nick_p2 || '상대')), charId: sel.charId.p2 };
+  game = new Game(canvas, { sheets, onEvent, p1, p2, train: mode === 'train' });
   game.setLocalSide(mySide);
   if (mode === 'solo') game.cpuP2 = true;
+  if (mode === 'train') game.trainDummyMode = 'stand';
   $('menu').style.display = 'none';
   $('hud').style.display = 'block';
   $('name1').textContent = `${CHARS[p1.charId].name}`;
@@ -378,7 +466,7 @@ function showResult(winner) {
 let localRematch = false, remoteRematch = false;
 function wantRematch() {
   localRematch = true;
-  if (mode === 'solo') return doRematch();
+  if (mode === 'solo' || mode === 'train') return doRematch();
   if (net) net.sendSys({ t: 'rematch' });
   $('resultSub').textContent = '상대 대기 중…';
   checkRematch();
@@ -388,12 +476,14 @@ function checkRematch() {
 }
 function doRematch() {
   $('resultBar').style.display = 'none';
+  if (mode === 'train' && game) { game.trainReset(); screen = 'fight'; return; }
   game.resetMatch(
     { name: game.p1.name, charId: game.p1.charId },
     { name: game.p2.name, charId: game.p2.charId },
   );
   game.setLocalSide(mySide);
   if (mode === 'solo') game.cpuP2 = true;
+  if (mode === 'train') game.train = true;
   updatePips();
   screen = 'fight';
 }
@@ -409,6 +499,7 @@ function toSelect(fromResult) {
 
 // ---------- 메뉴 버튼 ----------
 $('btnSolo').onclick = () => { nick = $('nick').value.trim() || '나'; startSolo(); };
+$('btnTrain').onclick = () => { nick = $('nick').value.trim() || '나'; startTrain(); };
 $('btnCreate').onclick = () => {
   nick = $('nick').value.trim() || '호스트';
   roomCode = makeCode();
@@ -483,7 +574,7 @@ bindBtn('tSelOK', () => handleKey(screen === 'select' ? 'KeyJ' : ''));
 
 function btnPress(b) {
   if (screen === 'select') { handleKey('KeyJ'); return; }
-  if (screen === 'fight' && game) game.localAttack(b);
+  if (screen === 'fight' && game) { game.localAttack(b); recInput(b); }
   if (screen === 'title') toMenu();
   if (screen === 'result' && b === 1) wantRematch();
 }
@@ -529,7 +620,7 @@ function drawSelect() {
   ctx.textAlign = 'center';
   ctx.font = 'italic 900 26px Georgia, serif';
   ctx.fillStyle = '#ffd75e';
-  ctx.fillText(mode === 'solo' ? 'SELECT YOUR FIGHTER' : `SELECT (ROOM ${roomCode || ''})`, CFG.W / 2, 30);
+  ctx.fillText((mode === 'solo' || mode === 'train') ? 'SELECT YOUR FIGHTER' : `SELECT (ROOM ${roomCode || ''})`, CFG.W / 2, 30);
   // 타이머
   const t = Math.ceil(sel.t / 60);
   ctx.font = 'bold 14px monospace';
@@ -574,7 +665,7 @@ function drawSelect() {
   ctx.fillStyle = '#ccc';
   ctx.fillText('주요기: ' + c.key.join(' / '), CFG.W - 24, 244);
   ctx.fillStyle = '#888';
-  ctx.fillText(isTouch ? '◀ ▶ 선택 · 펀치 버튼 결정' : (mode === 'solo' ? 'A/D 선택 · J 결정' : 'A/D 선택 · J 결정 · K 해제'), CFG.W - 24, 258);
+  ctx.fillText(isTouch ? '◀ ▶ 선택 · 펀치 버튼 결정' : ((mode === 'solo' || mode === 'train') ? 'A/D 선택 · J 결정' : 'A/D 선택 · J 결정 · K 해제'), CFG.W - 24, 258);
   ctx.textAlign = 'center';
 }
 
@@ -598,7 +689,7 @@ function drawVs() {
   ctx.fillText('VS', CFG.W / 2, 150);
   ctx.font = 'bold 12px monospace';
   ctx.fillStyle = '#ccc';
-  ctx.fillText('STONE DOJO — SUNSET · FIRST TO 2', CFG.W / 2, 246);
+  ctx.fillText(mode === 'train' ? 'TRAINING MODE · G 더미전환 · X 리셋' : 'STONE DOJO — SUNSET · FIRST TO 2', CFG.W / 2, 246);
 }
 
 // ---------- 메인 루프 ----------
@@ -652,14 +743,16 @@ function frame(now) {
     return;
   }
 
-  // fight (솔로에서 커맨드표 열면 일시정지)
-  if (moveOpen && mode === 'solo' && game) { game.render(); return; }
+  // fight (솔로/연습에서 커맨드표 열면 일시정지)
+  if (moveOpen && (mode === 'solo' || mode === 'train') && game) { game.render(); return; }
   acc += dt;
   const raw = readRaw();
   while (acc >= 1 / 60) {
     game.step(raw, net);
     acc -= 1 / 60;
   }
+  trackTrainFrame();
+  if (mode === 'train') drawTrain();
   if (net) {
     if (now - lastSync > 1000 / CFG.SYNC_HZ) {
       lastSync = now;
@@ -675,8 +768,13 @@ function frame(now) {
   // HUD
   $('hp1').style.width = `${(100 * game.p1.hp / game.p1.maxHp).toFixed(1)}%`;
   $('hp2').style.width = `${(100 * game.p2.hp / game.p2.maxHp).toFixed(1)}%`;
-  $('timer').textContent = Math.max(0, Math.ceil(game.time));
-  $('round').textContent = `R${game.round} · ${CFG.WIN_ROUNDS}선승`;
+  if (mode === 'train') {
+    $('timer').textContent = '∞';
+    $('round').textContent = `연습중 · 더미:${DUMMY_LABEL[game.trainDummyMode] || ''}`;
+  } else {
+    $('timer').textContent = Math.max(0, Math.ceil(game.time));
+    $('round').textContent = `R${game.round} · ${CFG.WIN_ROUNDS}선승`;
+  }
   $('rage1').style.visibility = game.p1.rage && game.p1.hp > 0 ? 'visible' : 'hidden';
   $('rage2').style.visibility = game.p2.rage && game.p2.hp > 0 ? 'visible' : 'hidden';
 }

@@ -13,11 +13,16 @@ export class Game {
     this.onEvent = opts.onEvent || (() => {});
     this.sheets = opts.sheets || {}; // charId -> {img, meta}
     this.demo = !!opts.demo;
+    this.train = !!opts.train; // 연습 모드 (타이머/라운드 없음, 더미 상대)
+    this.trainDummyMode = 'stand'; // stand|guard|crouch
+    this.trainResetT = 0;
     this.shake = 0;
     this.hitstop = 0;
+    this.flash = 0; // KO 화면 플래시
     this.timeScale = 1;
     this.slowT = 0;
     this.particles = [];
+    this.dmgNums = []; // 데미지 숫자 팝업 {x,y,txt,t,color}
     this.announce = null; // {text, sub, t, dur, size}
     this.combo = { p1: null, p2: null };
     this.cpuT = 0;
@@ -54,7 +59,11 @@ export class Game {
     this.combo = { p1: null, p2: null };
     this.particles.length = 0;
     this.announce = null;
-    if (!this.demo) {
+    if (this.train) {
+      this.phase = 'fight';
+      this.time = 99;
+      this.say('TRAINING', 'G 더미전환 · X 리셋', 70, 36);
+    } else if (!this.demo) {
       this.say(`ROUND ${this.round}`, '', 55, 40);
       sfx.round();
       this.onEvent('round', { round: this.round });
@@ -130,13 +139,14 @@ export class Game {
     }
 
     if (this.phase === 'fight') {
-      this.time -= 1 / 60;
+      if (!this.train) this.time -= 1 / 60;
       const locked = this.phase !== 'fight' || !!this.announce;
       const empty = {};
       const rawFor = (side) => (locked ? empty : (side === this.localSide ? localRaw : empty));
       if (this.cpuP1) this.cpu(this.p1, this.p2);
       else this.p1.update(rawFor('p1'), this.p2);
-      if (this.cpuP2) this.cpu(this.p2, this.p1);
+      if (this.train) this.trainDummy(this.p2, this.p1);
+      else if (this.cpuP2) this.cpu(this.p2, this.p1);
       else this.p2.update(rawFor('p2'), this.p1);
       // 콤보 리셋 감지 (착지)
       for (const [me, foe, key] of [[this.p1, this.p2, 'p2'], [this.p2, this.p1, 'p1']]) {
@@ -147,7 +157,13 @@ export class Game {
       this.checkHit(this.p1, this.p2, net, 'p1');
       this.checkHit(this.p2, this.p1, net, 'p2');
       const dead1 = this.p1.hp <= 0, dead2 = this.p2.hp <= 0;
-      if (dead1 || dead2 || this.time <= 0) this.endRound(dead1, dead2);
+      if (this.train) {
+        if ((dead1 || dead2) && !this.trainResetT) {
+          this.trainResetT = 80;
+          sfx.ko();
+          this.say(dead1 && dead2 ? 'DOUBLE K.O.!' : 'K.O.!', '', 60, 52);
+        }
+      } else if (dead1 || dead2 || this.time <= 0) this.endRound(dead1, dead2);
     } else if (this.phase === 'ko' || this.phase === 'roundEnd') {
       this.p1.update({}, this.p2);
       this.p2.update({}, this.p1);
@@ -208,6 +224,7 @@ export class Game {
       this.hitstop = 3; this.shake = 2;
       sfx.block();
       this.spark(def.x - def.facing * 14, def.centerY, 4, '#7db8ff');
+      this.dmgNum(def.x, def.y - 108, chip, '#9fc4ff');
       if (net && iAmAttacker) net.sendHit({ dmg: chip, push: 2.5, type: 'block', stun: 10 + Math.round(dmg * 0.25) });
       return;
     }
@@ -219,6 +236,7 @@ export class Game {
       this.hitstop = 10; this.shake = 6;
       sfx.screw();
       this.spark(def.x, def.centerY, 14, '#4df3ff');
+      this.dmgNum(def.x, def.y - 118, dmg, '#4df3ff');
       this.say2('SCREW!', side);
       if (net && iAmAttacker) net.sendHit({ dmg, push: 2, type: 'screw' });
       return;
@@ -233,6 +251,7 @@ export class Game {
       if (m.electric) { sfx.electric(); this.spark(def.x, def.centerY - 20, 20, '#bfe9ff'); }
       else sfx.launch();
       this.spark(att.x + att.facing * m.range * 0.8, def.centerY, 10, '#ffd75e');
+      this.dmgNum(def.x, def.y - 118, dmg, m.electric ? '#bfe9ff' : '#ffd75e');
       if (net && iAmAttacker) net.sendHit({ dmg, push: 2, type: 'launch', launchVy: vy });
       return;
     }
@@ -245,6 +264,7 @@ export class Game {
       this.hitstop = 5; this.shake = 4;
       m.h === 'l' ? sfx.kick() : (atk.id === 'm1' || atk.id === 'm2' ? sfx.punch() : sfx.kick());
       this.spark(def.x, def.centerY, 8, '#fff');
+      this.dmgNum(def.x, def.y - 118, dmg, '#fff');
       if (net && iAmAttacker) net.sendHit({ dmg, push: 1.5, type: 'air', launchVy: vy });
       return;
     }
@@ -253,11 +273,12 @@ export class Game {
     const type = m.kd ? 'kd' : 'hit';
     const stun = 14 + Math.round(m.dmg * 0.4);
     def.applyHit({ dmg, push: m.push || 2.5, type, fromX: att.x, stun });
-    this.hitstop = m.heavy ? 9 : 5; this.shake = m.heavy ? 7 : 4;
+    this.hitstop = m.heavy ? 8 : 4; this.shake = m.heavy ? 7 : 4;
     if (m.heavy) sfx.heavy();
     else if (m.btn === 3 || m.btn === 4) sfx.kick();
     else sfx.punch();
     this.spark(att.x + att.facing * m.range * 0.8, def.centerY, m.heavy ? 14 : 8, ch ? '#ff5a5a' : '#ffd75e');
+    this.dmgNum(def.x, def.y - 112, dmg, ch ? '#ff6a6a' : '#fff');
     if (ch) this.say2('COUNTER!', side);
     if (net && iAmAttacker) net.sendHit({ dmg, push: m.push || 2.5, type, stun });
   }
@@ -282,6 +303,7 @@ export class Game {
     sfx.throw();
     this.hitstop = 8; this.shake = 6;
     this.spark(def.x, def.centerY, 12, '#ff9f1c');
+    this.dmgNum(def.x, def.y - 112, dmg, '#ff9f1c');
     this.say2('THROW!', side);
     if (net && this.localSide === side) net.sendHit({ dmg, type: 'grab' });
   }
@@ -294,6 +316,8 @@ export class Game {
     } else {
       def.applyHit({ dmg: h.dmg, push: h.push, type: h.type, fromX: att.x, launchVy: h.launchVy, stun: h.stun });
     }
+    this.dmgNum(def.x, def.y - 112, h.dmg, h.type === 'block' ? '#9fc4ff' : '#fff');
+    if (h.type === 'launch' || h.type === 'screw') this.bumpCombo(this.localSide === 'p1' ? 'p2' : 'p1', h.dmg, h.type === 'screw');
     this.hitstop = 5; this.shake = 4;
     sfx.punch();
   }
@@ -318,6 +342,7 @@ export class Game {
     this.phase = 'ko';
     this.phaseT = 0;
     this.slowT = 46;
+    this.flash = 7;
     this.timeScale = 1;
     if (this.demo) {
       setTimeout(() => {}, 0);
@@ -365,6 +390,32 @@ export class Game {
       this.phaseT = 0;
       this.onEvent('roundEnd', { winner, wins: { ...this.wins } });
     }
+  }
+
+  // ── 연습 더미 ──
+  trainDummy(me, foe) {
+    me.facing = foe.x >= me.x ? 1 : -1;
+    const raw = { f: false, b: false, u: false, d: false };
+    if (me.state === 'down' || me.attack || me.stun > 0 || me.state === 'air' || me.state === 'grabVictim') {
+      me.update(raw, foe);
+      return;
+    }
+    if (this.trainDummyMode === 'guard') raw.b = true;
+    else if (this.trainDummyMode === 'crouch') { raw.b = true; raw.d = true; }
+    me.update(raw, foe);
+  }
+
+  trainReset() {
+    this.p1.resetRound(150, 1);
+    this.p2.resetRound(330, -1);
+    this.time = 99;
+    this.phase = 'fight';
+    this.phaseT = 0;
+    this.combo = { p1: null, p2: null };
+    this.particles.length = 0;
+    this.dmgNums.length = 0;
+    this.announce = null;
+    this.trainResetT = 0;
   }
 
   // ── CPU ──
@@ -432,6 +483,20 @@ export class Game {
   }
 
   // ── 파티클 ──
+  dmgNum(x, y, txt, color = '#fff') {
+    this.dmgNums.push({ x, y, txt: String(txt), t: 0, color });
+    if (this.dmgNums.length > 12) this.dmgNums.shift();
+  }
+
+  dust(x, y, n = 5) {
+    for (let i = 0; i < n; i++) {
+      this.particles.push({
+        x: x + (Math.random() - 0.5) * 22, y: y - Math.random() * 4,
+        vx: (Math.random() - 0.5) * 1.6, vy: -0.4 - Math.random() * 0.8,
+        life: 12 + Math.random() * 8, color: 'rgba(190,170,150,.8)', size: 1 + Math.random() * 2,
+      });
+    }
+  }
   spark(x, y, n, color) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -451,6 +516,14 @@ export class Game {
     if (this.floatText) {
       this.floatText.t += 1;
       if (this.floatText.t > 50) this.floatText = null;
+    }
+    for (const d of this.dmgNums) { d.t += 1; d.y -= 0.55; }
+    this.dmgNums = this.dmgNums.filter((d) => d.t < 42);
+    if (this.flash > 0) this.flash -= 1;
+    // 연습 모드 KO 후 자동 리셋
+    if (this.trainResetT > 0) {
+      this.trainResetT -= 1;
+      if (this.trainResetT <= 0) this.trainReset();
     }
     // 어트랙트 리셋
     if (this.demoReset) {
@@ -488,9 +561,58 @@ export class Game {
       ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
     }
     ctx.globalAlpha = 1;
+    this.drawSwoosh(ctx);
+    this.drawDmgNums(ctx);
     this.drawCombo(ctx);
     this.drawAnnounce(ctx);
+    if (this.flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${(this.flash / 7 * 0.4).toFixed(2)})`;
+      ctx.fillRect(-10, -10, CFG.W + 20, CFG.H + 20);
+    }
+    // 착지/대시 먼지
+    for (const f of [this.p1, this.p2]) {
+      if (f.onGround && !f._wasG) this.dust(f.x, CFG.GROUND_Y, 6);
+      if ((f.state === 'dash' || f.state === 'backdash') && f.stateT % 6 === 0) this.dust(f.x, CFG.GROUND_Y, 2);
+      f._wasG = f.onGround;
+    }
     ctx.restore();
+  }
+
+  // 공격 검기 (타격점 스윙 아크)
+  drawSwoosh(ctx) {
+    for (const f of [this.p1, this.p2]) {
+      const a = f.attack;
+      if (!a) continue;
+      const m = a.move, t = a.t;
+      if (t < m.st || t > m.st + m.ac || m.grab) continue;
+      const p = (t - m.st + 1) / (m.ac + 1);
+      const cx = f.x + f.facing * m.range * 0.45;
+      const cy = f.centerY - 8;
+      const r = m.range * (0.45 + 0.55 * p);
+      const c = f.facing === 1 ? 0 : Math.PI;
+      ctx.save();
+      ctx.globalAlpha = 0.8 * (1 - p * 0.55);
+      ctx.strokeStyle = m.electric ? '#bfe9ff' : m.heavy ? '#ff9f1c' : '#ffffff';
+      ctx.lineWidth = 6 * (1 - p) + 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, c - 1.0, c + 1.0);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawDmgNums(ctx) {
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 13px monospace';
+    for (const d of this.dmgNums) {
+      ctx.globalAlpha = Math.min(1, (42 - d.t) / 14);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#000';
+      ctx.strokeText(d.txt, Math.round(d.x), Math.round(d.y));
+      ctx.fillStyle = d.color;
+      ctx.fillText(d.txt, Math.round(d.x), Math.round(d.y));
+    }
+    ctx.globalAlpha = 1;
   }
 
   drawStage(ctx) {

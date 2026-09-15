@@ -278,8 +278,8 @@ export class Fighter {
         }
         buffered.push(q);
       }
-      // 버퍼 저장 (연계 타이밍용, 10f)
-      if (buffered.length) { this.buffer = buffered[buffered.length - 1]; this.bufferT = 10; }
+      // 버퍼 저장 (연계 타이밍용, 14f)
+      if (buffered.length) { this.buffer = buffered[buffered.length - 1]; this.bufferT = 14; }
       if (this.bufferT > 0) {
         this.bufferT -= 1;
         const nx = m.next?.[this.buffer.code];
